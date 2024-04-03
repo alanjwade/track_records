@@ -1,0 +1,155 @@
+from bs4 import BeautifulSoup
+from selenium import webdriver
+#from requests_html import HTMLSession
+
+def parse_track_results(one_meet):
+    """
+    This function parses track and field results from a single HTML page using Beautiful Soup.
+
+    Args:
+        url: The URL of the HTML page containing the results.
+
+    Returns:
+        A list of dictionaries, where each dictionary represents an athlete's result.
+    """
+
+    with open(one_meet["page_content_file"], "r") as f:
+        content = f.read()
+
+    # Parse the HTML content
+    soup = BeautifulSoup(content, "html.parser")
+
+    # Find the header info
+    header_info = soup.find("header", class_="meet")
+
+    venue_name = header_info.find("div", class_="venueName").text.strip()
+    print('venue:{}'.format(venue_name))
+
+    # Find the table containing results (adjust selectors based on the website structure)
+    results_table = soup.find(id="resultsList")  # Replace with appropriate class or id
+
+#    print(results_table)
+
+    # If no table found, raise an error
+    if not results_table:
+        raise Exception("Results table not found")
+
+    event_arr = soup.find_all("div", class_="eventResult")
+
+ #   print(len(event_arr))
+    
+    results = []
+
+    for event in event_arr:
+
+
+        event_name = event.find(class_="eventName").text.strip()
+        print("event name:{}".format(event_name))
+
+        event_tag = event.find("table")['id']
+        print("event tag:{}".format(event_tag))
+
+        # Get the event column names
+        event_cols_tmp = event.find("tr", class_="eventHeadRow").find_all("th")
+        event_cols = [x.text.strip() for x in event_cols_tmp]
+
+        # event_cols is now an array of column names
+        # What ones are interesting? Just grab them all
+
+        result_dict = {}
+        # Extract data from table rows
+        for row in event.find_all("tr")[1:]:  # Skip header row
+            cells = row.find_all("td")
+
+            for index in range(0,len(event_cols)):
+                result_dict[event_cols[index]] = cells[index].text.strip()
+            index = index + 1
+            # # Extract data based on cell positions (adjust based on website structure)
+            # rank = cells[0].text.strip()
+            # name = cells[2].text.strip()
+            # result = cells[5].text.strip()
+            # # You can extract additional data like country, wind speed, etc. (adjust cell positions)
+
+            # # Create a dictionary for each athlete's result
+            # result_dict = {
+            # "rank": rank,
+            # "name": name,
+            # "result": result,
+            # }
+            results.append(result_dict)
+
+    return results
+
+def get_page_content(one_meet):
+    options = webdriver.FirefoxOptions()
+    options.add_argument('--headless')
+
+    browser = webdriver.Firefox(options=options)
+    browser.get(one_meet["url"])
+
+    content = browser.page_source
+
+    with open(one_meet["page_content_file"], "w") as f:
+        f.write(content)
+
+    browser.quit()
+
+    return True
+
+
+meet_arr = [
+    {
+        "meet_name": "2023_05_04 NCIL Finals",
+        "url": "https://co.milesplit.com/meets/520132-foothills-league-hs-ncil-ms-championships-2023/results/925348/formatted/",
+        "page_content_file": "NCIL_2023_05_04.html"
+    }
+]
+
+taghash = {
+    'm100m': 'Boys 100 meter dash',
+    'm200m': 'Boys 200 meter dash',
+    'm400m': 'Boys 400 meter dash',
+    'm800m': 'Boys 800 meter run',
+    'm1600m': 'Boys 1600 meter run',
+    'm110h': 'Boys 110 meter high hurdles',
+    'm200h': 'Boys 200 meter hurdles',
+    'm4x100m': 'Boys 4x100 meter relay',
+    'm4x200m': 'Boys 4x200 meter relay',
+    'm4x400m': 'Boys 4x400 meter relay',
+    'mhj': 'Boys high jump',
+    'mlj': 'Boys long jump',
+    'mtj': 'Boys triple jump',
+    'md': 'Boys discus',
+    'ms': 'Girls shot put',
+    'f100m': 'Girls 100 meter dash',
+    'f200m': 'Girls 200 meter dash',
+    'f400m': 'Girls 400 meter dash',
+    'f800m': 'Girls 800 meter run',
+    'f1600m': 'Girls 1600 meter run',
+    'f110h': 'Girls 110 meter high hurdles',
+    'f200h': 'Girls 200 meter hurdles',
+    'f4x100m': 'Girls 4x100 meter relay',
+    'f4x200m': 'Girls 4x200 meter relay',
+    'f4x400m': 'Girls 4x400 meter relay',
+    'fhj': 'Girls high jump',
+    'flj': 'Girls long jump',
+    'ftj': 'Girls triple jump',
+    'fd': 'Girls discus',
+    'fs': 'Girls shot put'}
+
+for meet in meet_arr:
+#    get_page_content(meet)
+    results = parse_track_results(meet)
+
+ #   print(results)
+
+    # Print the results
+    # for result in results:
+    #     print(f"Rank: {result['rank']}, Name: {result['name']}, Result: {result['result']}")
+
+
+
+
+#url = "https://co.milesplit.com/meets/520132-foothills-league-hs-ncil-ms-championships-2023/results/925348/formatted/"  # Replace with the actual results page URL
+
+
