@@ -216,7 +216,7 @@ taghash = {
     'f400m'  : {"name": 'Girls 400 meter dash'        , "order": 'asc'},
     'f800m'  : {"name": 'Girls 800 meter run'         , "order": 'asc'},
     'f1600m' : {"name": 'Girls 1600 meter run'        , "order": 'asc'},
-    'f110h'  : {"name": 'Girls 110 meter high hurdles', "order": 'asc'},
+    'f100h'  : {"name": 'Girls 100 meter high hurdles', "order": 'asc'},
     'f200h'  : {"name": 'Girls 200 meter hurdles'     , "order": 'asc'},
     'f4x100m': {"name": 'Girls 4x100 meter relay'     , "order": 'asc'},
     'f4x200m': {"name": 'Girls 4x200 meter relay'     , "order": 'asc'},
@@ -226,6 +226,12 @@ taghash = {
     'ftj'    : {"name": 'Girls triple jump'           , "order": 'asc'},
     'fd'     : {"name": 'Girls discus'                , "order": 'asc'},
     'fs'     : {"name": 'Girls shot put'              , "order": 'asc'},
+    'm3200'  : {"name": 'Boys 3200 meter run'         , "order": 'asc'},
+    'f3200'  : {"name": 'Girls 3200 meter run'        , "order": 'asc'},
+    'm4x800m': {"name": 'Boys 4x800 meter relay'      , "order": 'asc'},
+    'f4x800m': {"name": 'Girls 4x800 meter relay'     , "order": 'asc'},
+    'm300h'  : {"name": 'Boys 300 meter hurdles'      , "order": 'asc'},
+    'f300h'  : {"name": 'Girls 300 meter hurdles'     , "order": 'asc'}
     }
 
 
@@ -354,11 +360,46 @@ def get_events_for_athlete_id(athlete_id, conn):
 
     cursor = conn.cursor()
 
-    event_id_query = "SELECT * FROM RESULTS WHERE athlete_id = ?"
+    event_id_query = "SELECT event_id FROM RESULTS WHERE athlete_id = ?"
     cursor.execute(event_id_query, (athlete_id,))
     event_ids = cursor.fetchall()
 
     return event_ids
+
+def get_personal_records(athlete_id, conn):
+    """ Retrieves a list of events and personal records for a specific athlete.
+
+    Args:
+        athlete_id: The ID of the athlete to query results for.
+
+    Returns:
+        A list of dictionaries, where each dictionary contains 'event_name' and 'personal_record' keys.
+    """
+
+    # Connect to the database
+    cursor = conn.cursor()
+
+    # Query to find personal records grouped by event
+    query = """
+    SELECT e.name AS event_name, MIN(r.result) AS personal_record
+    FROM Results r
+    INNER JOIN Events e ON r.event_id = e.event_id
+    WHERE r.athlete_id = ?
+    GROUP BY e.name;
+    """
+    cursor.execute(query, (athlete_id,))
+
+    # Fetch results and convert to list of dictionaries
+    results = cursor.fetchall()
+    personal_records = []
+    for row in results:
+        personal_records.append({
+        "event_name": row[0],
+        "personal_record": row[1]
+        })
+
+    conn.close()
+    return personal_records
 
 def insert_data(results, db_fn):
    
@@ -375,13 +416,24 @@ def insert_data(results, db_fn):
         event_name = result['event_name']
         event_order = 'asc'
         event_tag = result['event']
+        found=False
 
         # Find the normalized event in the taghash
         for norm_event in taghash.keys():
-            # print('{}:{}'.format(norm_event, event_tag))
+#            print('{}:{}'.format(norm_event, event_tag))
             if norm_event in event_tag:
                 event_name = norm_event
                 event_order = taghash[norm_event]['order']
+                found=True
+                break
+
+        if found == False:
+            if 'm100h' in event_tag:
+                event_name = 'm110h'
+                event_order = 'asc'
+            else:
+                pp(result)
+                exit()
 
         team_name = result['Team']
         if 'Athlete' in result.keys():
@@ -519,9 +571,11 @@ if __name__ == "__main__":
 
     #pp(athlete_ids)
 
-    events = get_events_for_athlete_id(503, conn)
+    # event_ids = get_events_for_athlete_id(503, conn)
 
-    pp(events)
+    prs = get_personal_records(503, conn)
+
+    pp(prs)
     conn.close()
 
     if args.hack:
