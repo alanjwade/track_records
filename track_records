@@ -240,14 +240,7 @@ taghash = {
     #     print(f"Rank: {result['rank']}, Name: {result['name']}, Result: {result['result']}")
 
 
-def create_db(db_fn):
-
-
-    pp('Creating db {}'.format(db_fn))
-
-    Path(db_fn).unlink()
-
-    conn = sqlite3.connect(db_fn)
+def create_db(conn):
 
     cursor = conn.cursor()
 
@@ -304,8 +297,6 @@ def create_db(db_fn):
 #                    UNIQUE (athlete_id, meet_id, event_id)
 
     conn.commit()
-
-    conn.close()
 
     return conn
 
@@ -401,9 +392,101 @@ def get_personal_records(athlete_id, conn):
     conn.close()
     return personal_records
 
-def insert_data(results, db_fn):
+def get_team_id(school, conn):
+
+    cursor = conn.cursor()
+
+    query = '''
+    SELECT team_id
+    FROM Teams
+    Where name = ?;
+    '''
+
+    cursor.execute(query, (school, ))
+
+    result = cursor.fetchone()[0]
+
+    return result
+
+def get_result_ids_from_team_id(team_id, conn):
+
+    conn.row_factory = lambda cursor, row: row[0]
+    cursor = conn.cursor()
+    query = '''
+        SELECT result_id
+        FROM Results
+        WHERE team_id = ?;
+        '''
+    cursor.execute(query, (team_id, ))
+    results = cursor.fetchall()
+    conn.row_factory = None
+    return results
+
+def get_team_event_ids_from_results(team_id, conn):
+
+    conn.row_factory = lambda cursor, row: row[0]
+    cursor = conn.cursor()
+    query = '''
+        SELECT DISTINCT event_id
+        FROM Results
+        WHERE team_id = ?
+        ORDER BY event_id ASC;
+        '''
+    cursor.execute(query, (team_id, ))
+    results = cursor.fetchall()
+    conn.row_factory = None
+    return results
+
+def get_school_record_for_event_id(event_id, team_id, conn):
+
+#    conn.row_factory = lambda cursor, row: row[0]
+    cursor = conn.cursor()
+    query = '''
+        SELECT 
+            Events.name AS event_name,
+            Athletes.name AS athlete_name,
+            Results.result AS result
+        FROM
+            Results
+            INNER JOIN Athletes ON Athletes.athlete_id = Results.athlete_id
+            INNER JOIN Events ON Events.event_id = Results.event_id
+        WHERE Results.team_id = ? AND Results.event_id = ?
+        ORDER BY result ASC;
+        '''
+    cursor.execute(query, (team_id, event_id))
+    results = cursor.fetchone()
+    conn.row_factory = None
+    return results
+
+
+def get_school_records(school, conn):
+    '''Return a list of events and the records for each from a particular school.
+    The school is the text that should match what's in the 'Teams' table.'''
+
+    team_id = get_team_id(school, conn)
+
+    print('team_id = {}'.format(team_id))
+
+    # Now, need to get all the results from this team_id
+
+    #team_results = get_result_ids_from_team_id(team_id, conn)
+    #pp(team_results)
+
+    event_ids = get_team_event_ids_from_results(team_id, conn)
+
+    # Loop on event_ids
+    for event_id in event_ids:
+
+        result = get_school_record_for_event_id(event_id, team_id, conn)
+
+        pp(result)
+
+    # pp(event_ids)
+
+    exit()
+
+def insert_data(results, conn):
    
-    conn = sqlite3.connect(db_fn)
     cursor = conn.cursor()
 
 
@@ -512,12 +595,8 @@ def insert_data(results, db_fn):
             exit()
 
 
-        conn.commit()
+    conn.commit()
 
-
-#        print(f"Record inserted for {athlete_name} in {event_name}.")
-
-    conn.close()
 
 
 
@@ -548,12 +627,22 @@ if __name__ == "__main__":
         with open("track_results.json", "w") as f:
             f.write(json_string)
 
+    
+
     if (args.generate_db):
 
 #        pprint.pp(results)
         # exit()
+        pp('Creating db {}'.format(args.db))
+        try:
+            Path(args.db).unlink()
+        except:
+            pass
+        conn = sqlite3.connect(args.db)
+        create_db(conn)
+    else:
+        conn = sqlite3.connect(args.db)
 
-        conn = create_db(args.db)
 
     if args.populate_db:
 
@@ -563,11 +652,13 @@ if __name__ == "__main__":
         results = json.loads(json_string)
         print("Read track_results.json")
 
-        insert_data(results, args.db)
+        insert_data(results, conn)
 
 
-    conn = sqlite3.connect(args.db)
-    athlete_ids = get_athletes_on_team("Saint Joseph Catholic School", conn)
+#    conn = sqlite3.connect(args.db)
+    # athlete_ids = get_athletes_on_team("Saint Joseph Catholic School", conn)
+
+    get_school_records('Saint Joseph Catholic School', conn)
 
     #pp(athlete_ids)
 
