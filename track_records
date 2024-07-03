@@ -7,6 +7,7 @@ from selenium import webdriver
 import sqlite3
 import traceback
 import json
+import re
 #from requests_html import HTMLSession
 
 track_path = Path("/home/")
@@ -255,6 +256,19 @@ taghash = {
     # for result in results:
     #     print(f"Rank: {result['rank']}, Name: {result['name']}, Result: {result['result']}")
 
+def format_records(records):
+    '''print out formatted records'''
+
+    for record in records:
+#        pp(record)
+        if len(record) > 3:
+            print('{:30s} {:30.30s} {:20s} {:20.20s} {:20s}'.format(
+                taghash[record[0]]['name'],
+                record[1],
+                record[2],
+                record[3],
+                record[4])
+            )
 
 def create_db(conn):
 
@@ -302,7 +316,8 @@ def create_db(conn):
                     conference_id INTEGER,
                     meet_id INTEGER,
                     event_id INTEGER,
-                    result REAL,
+                    result_orig TEXT,
+                    result_sort REAL,
                     place INTEGER,
                     FOREIGN KEY (athlete_id) REFERENCES Athletes(athlete_id),
                     FOREIGN KEY (team_id) REFERENCES Teams(team_id),
@@ -461,13 +476,17 @@ def get_school_record_for_event_id(event_id, team_id, conn):
         SELECT 
             Events.name AS event_name,
             Athletes.name AS athlete_name,
-            Results.result AS result
+            Meets.meet_date,
+            Meets.location,
+            Results.result_orig AS result,
+            Results.result_sort AS result_sort
         FROM
             Results
             INNER JOIN Athletes ON Athletes.athlete_id = Results.athlete_id
             INNER JOIN Events ON Events.event_id = Results.event_id
+            INNER JOIN Meets ON Meets.meet_id = Results.meet_id
         WHERE Results.team_id = ? AND Results.event_id = ?
-        ORDER BY result ASC;
+        ORDER BY result_sort ASC;
         '''
     cursor.execute(query, (team_id, event_id))
     results = cursor.fetchone()
@@ -490,12 +509,15 @@ def get_school_records(school, conn):
 
     event_ids = get_team_event_ids_from_results(team_id, conn)
 
+    results = []
+
     # Loop on event_ids
     for event_id in event_ids:
 
-        result = get_school_record_for_event_id(event_id, team_id, conn)
+        results.append(get_school_record_for_event_id(event_id, team_id, conn))
 
-        pp(result)
+    # pp(results)
+    format_records(results)
 
     # pp(event_ids)
 
@@ -545,7 +567,7 @@ def insert_data(results, conn):
         conference_name = team_conference['conf']
 
         mark = result['Mark']
-        place = result['Place']
+        place = result['venue']
         meet_name = result['meet_name']
 
 #        pp(event_name)
@@ -575,8 +597,8 @@ def insert_data(results, conn):
         cursor.execute(event_query, (event_name, event_order))
         # Now the event is in the DB
 
-        meet_query = """INSERT OR IGNORE INTO Meets (name, meet_date) VALUES (?, ?)"""
-        cursor.execute(meet_query, (meet_name, datetime.datetime.strptime(result['meet_date'], "%Y-%m-%d")))
+        meet_query = """INSERT OR IGNORE INTO Meets (name, meet_date, location) VALUES (?, ?, ?)"""
+        cursor.execute(meet_query, (meet_name, datetime.datetime.strptime(result['meet_date'], "%Y-%m-%d"), place))
         # Now the meet is in the DB
 
 
@@ -589,20 +611,38 @@ def insert_data(results, conn):
         cursor.execute(event_id_query, (event_name,))
         event_id = cursor.fetchone()[0]  # Get event ID from query result
 
-
-
-
-      
-
         meet_id_query = "SELECT meet_id FROM Meets WHERE name = ?"
         cursor.execute(meet_id_query, (meet_name,))
         meet_id = cursor.fetchone()[0]  # Get meet ID from query result
 
-        insert_result = """INSERT INTO Results (athlete_id, team_id, conference_id, meet_id, event_id, result, place)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)"""
+
+
+        insert_result = """INSERT INTO Results (athlete_id,
+                                                team_id, 
+                                                conference_id, 
+                                                meet_id, 
+                                                event_id, 
+                                                result_orig,
+                                                result_sort,
+                                                place)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
+
+        if '-' in mark:
+            # it's a distance
+            mark_sort = -1.0 * track_distance_to_float(mark)
+        else:
+            # it's time
+            mark_sort = time_string_to_float(mark)
 
         try:
-            cursor.execute(insert_result, (athlete_id, team_id, conference_id, meet_id, event_id, mark, place))
+            cursor.execute(insert_result, (athlete_id,
+                                           team_id, 
+                                           conference_id,
+                                           meet_id, 
+                                           event_id, 
+                                           mark, 
+                                           mark_sort, 
+                                           place))
 
         except Exception:
             print('Error:')
@@ -613,8 +653,55 @@ def insert_data(results, conn):
 
     conn.commit()
 
+def track_distance_to_float(td):
+    '''convert distances in the form of '85-11.25' to 85.90 or whatever that is.'''
 
+    feet, inches_str = td.split('-')
+    inches, fraction = inches_str.split('.')
 
+      # Convert each part to a float
+    feet = float(feet.strip())
+    inches = float(inches.strip())
+    fraction = float(fraction) if fraction else 0
+    # Convert inches and fraction to feet and add to total feet
+    total_feet = feet + inches / 12 + fraction / (12 * 100)  # Account for potential hundredths in fraction
+
+    return total_feet
+
+def time_string_to_float(time_str):
+  """
+  Converts a string of the format 'm:ss.ss' or 'ss.ss' to a float representing the total time in seconds.
+
+  Args:
+      time_str: A string representing the time in minutes and seconds format.
+
+  Returns:
+      A float representing the total time in seconds.
+
+  Raises:
+      ValueError: If the input string is not in the correct format.
+  """
+  try:
+    # Split the string at the colon (':') if present
+    if ":" in time_str:
+      minutes, seconds = time_str.split(":")
+    else:
+      minutes = "0"
+      seconds = time_str
+  except ValueError:
+    raise ValueError("Invalid time format. Please use 'm:ss.ss' or 'ss.ss'.")
+
+  # Convert minutes and seconds to floats
+  try:
+    minutes = float(minutes.strip())
+    seconds = float(seconds.strip())
+  except ValueError:
+    raise ValueError("Invalid time format. Please use 'm:ss.ss' or 'ss.ss'.")
+
+  # Calculate total time in seconds
+  total_seconds = minutes * 60 + seconds
+
+  return total_seconds
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
