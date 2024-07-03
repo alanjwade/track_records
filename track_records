@@ -1,4 +1,5 @@
 from pprint import pp
+import datetime 
 import argparse
 from pathlib import Path
 from bs4 import BeautifulSoup
@@ -55,7 +56,7 @@ def parse_track_results(one_meet):
         event_name = event.find(class_="eventName").text.strip()
 #        print("event name:{}".format(event_name))
 
-        print('***** event: {}'.format(event_name))
+        # print('***** event: {}'.format(event_name))
         event_tag = event.find("table")['id']
 #        print("event tag:{}".format(event_tag))
 
@@ -79,11 +80,12 @@ def parse_track_results(one_meet):
             result_dict['event'] = event_tag
             result_dict['event_name'] = event_name
             result_dict['meet_name'] = one_meet['meet_name']
+            result_dict['meet_date'] = one_meet['date']
 
             for index in range(0,len(event_cols)):
                 result_dict[event_cols[index]] = cells[index].text.strip()
             # # Extract data based on cell positions (adjust based on website structure)
-            print('******** result: {}'.format(result_dict[event_cols[2]]))
+            # print('******** result: {}'.format(result_dict[event_cols[2]]))
 
             # rank = cells[0].text.strip()
             # name = cells[2].text.strip()
@@ -124,74 +126,88 @@ meet_arr = [
     {
         "meet_name": "2019_04_06 NCIL Meet #1",
         "url": "https://co.milesplit.com/meets/352832-ncil-2019-meet-1-2019/results",
-        "page_content_file": "NCIL_2019_04_06.html"
+        "page_content_file": "NCIL_2019_04_06.html",
+        "date": "2019-04-06"
     },
 
     {
         "meet_name": "2022 NCIL Meet #2",
         "url": "https://co.milesplit.com/meets/456814-ncil-meet-2-2022/results",
-        "page_content_file": "NCIL_2022_04_29.html"
+        "page_content_file": "NCIL_2022_04_29.html",
+        "date": "2022-04-29"
     },    {
         "meet_name": "2022 NCIL Meet #3",
         "url": "https://co.milesplit.com/meets/456816-ncil-meet-3-2022/results",
-        "page_content_file": "NCIL_2022_05_03.html"
+        "page_content_file": "NCIL_2022_05_03.html",
+        "date": "2022-05-03"
     },
     {
         "meet_name": "2022_05_06 NCIL Meet #4",
         "url": "https://co.milesplit.com/meets/456815-ncil-meet-4-2022/results",
-        "page_content_file": "NCIL_2022_05_06.html"
+        "page_content_file": "NCIL_2022_05_06.html",
+        "date": "2022-05-06"
     },
     {
         "meet_name": "2022_05_10 NCIL Meet #5",
         "url": "https://co.milesplit.com/meets/460971-ncil-meet-5-2022/results",
-        "page_content_file": "NCIL_2022_05_10.html"
+        "page_content_file": "NCIL_2022_05_10.html",
+        "date": "2022-05-10"
     },
     {
         "meet_name": "2022 NCIL Meet #6 League Championships",
         "url": "https://co.milesplit.com/meets/460973-ncil-meet-6-league-championships-2022/results/817291/formatted/",
-        "page_content_file": "NCIL_2022_05_13.html"
+        "page_content_file": "NCIL_2022_05_13.html",
+        "date": "2022-05-13"
     },
    
 
     {
         "meet_name": "2023_04_12",
         "url": "https://co.milesplit.com/meets/525895-ncil-meet-1-2023/results/900625/formatted/",
-        "page_content_file": "NCIL_2023_04_12.html"
+        "page_content_file": "NCIL_2023_04_12.html",
+        "date": "2023-04-12"
     },
     {
         "meet_name": "2023_04_19",
         "url": "https://co.milesplit.com/meets/534916-ncil-meet-2-2023/results/907237/formatted/",
-        "page_content_file": "NCIL_2023_04_19.html"
+        "page_content_file": "NCIL_2023_04_19.html",
+        "date": "2023-04-19"
     },
     {
         "meet_name": "2023_04_26",
         "url": "https://co.milesplit.com/meets/534909-ncil-meet-3-2023/results/915434/formatted/",
-        "page_content_file": "NCIL_2023_04_26.html"
+        "page_content_file": "NCIL_2023_04_26.html",
+        "date": "2023-04-26"
     },
     {
         "meet_name": "2023_05_04 NCIL Finals",
         "url": "https://co.milesplit.com/meets/520132-foothills-league-hs-ncil-ms-championships-2023/results/925348/formatted/",
-        "page_content_file": "NCIL_2023_05_04.html"
+        "page_content_file": "NCIL_2023_05_04.html",
+        "date": "2023-05-04"
     },
     {
         "meet_name": "2024_04_22 NCIL #2",
         "url": "https://co.milesplit.com/meets/599765-ncil-meet-2-2024/results",
-        "page_content_file": "NCIL_2024_04_22.html"
+        "page_content_file": "NCIL_2024_04_22.html",
+        "date": "2024-04-22"
     },
     {
         "meet_name": "2024_04_26 NCIL #3",
         "url": "https://co.milesplit.com/meets/599766-ncil-meet-3-2024/results",
-        "page_content_file": "NCIL_2024_04_26.html"
+        "page_content_file": "NCIL_2024_04_26.html",
+        "date": "2024-04-26"
     },
     {
         "meet_name": "2024_05_04 NCIL #4",
         "url": "https://co.milesplit.com/meets/589497-foothills-league-championships-ncil-meet-4-2024/results",
-        "page_content_file": "NCIL_2024_05_04.html"
+        "page_content_file": "NCIL_2024_05_04.html",
+        "date": "2024-05-04"
     },
     {
         "meet_name": "2024_05_10 NCIL Championship",
         "url": "https://co.milesplit.com/meets/599888-ncil-championship-2024/results",
-        "page_content_file": "NCIL_2024_05_10.html"
+        "page_content_file": "NCIL_2024_05_10.html",
+        "date": "2024-05-10"
     }
 ]
 
@@ -269,7 +285,7 @@ def create_db(conn):
     cursor.execute('''CREATE TABLE Meets (
                     meet_id INTEGER PRIMARY KEY,
                     name TEXT NOT NULL UNIQUE,
-                    date TEXT,
+                    meet_date DATE,
                     location TEXT
                     );''')
 
@@ -559,8 +575,8 @@ def insert_data(results, conn):
         cursor.execute(event_query, (event_name, event_order))
         # Now the event is in the DB
 
-        meet_query = """INSERT OR IGNORE INTO Meets (name) VALUES (?)"""
-        cursor.execute(meet_query, (meet_name,))
+        meet_query = """INSERT OR IGNORE INTO Meets (name, meet_date) VALUES (?, ?)"""
+        cursor.execute(meet_query, (meet_name, datetime.datetime.strptime(result['meet_date'], "%Y-%m-%d")))
         # Now the meet is in the DB
 
 
