@@ -496,7 +496,9 @@ def get_prs_for_single_athlete_id(athlete_id, conn):
     #pp(results)
     return results
 
-def get_school_record_for_event_id(team_id, conn):
+def get_school_records(school, conn):
+    '''Return a list of events and the records for each from a particular school.
+    The school is the text that should match what's in the 'Teams' table.'''
 
 #    conn.row_factory = lambda cursor, row: row[0]
     cursor = conn.cursor()
@@ -510,13 +512,14 @@ def get_school_record_for_event_id(team_id, conn):
             MIN(Results.result_sort) AS result_sort
         FROM
             Results
+            INNER JOIN Teams ON Teams.team_id = Results.team_id
             INNER JOIN Athletes ON Athletes.athlete_id = Results.athlete_id
             INNER JOIN Events ON Events.event_id = Results.event_id
             INNER JOIN Meets ON Meets.meet_id = Results.meet_id
-        WHERE Results.team_id = ?
+        WHERE Teams.name = ?
         GROUP BY event_name;
         '''
-    cursor.execute(query, (team_id, ))
+    cursor.execute(query, (school, ))
     results = cursor.fetchall()
     return results
 
@@ -524,8 +527,6 @@ def get_prs_for_school(school, year, conn):
     '''Find all participants in a school in a particular year. Then get their PRs.'''
 
     cursor = conn.cursor()
-    team_id = get_team_id(school, conn)
-
     query = '''
         SELECT
             Results.athlete_id AS athlete_id
@@ -534,10 +535,10 @@ def get_prs_for_school(school, year, conn):
             INNER JOIN Teams ON Teams.team_id = Results.team_id
             INNER JOIN Meets ON Meets.meet_id = Results.meet_id
         WHERE
-            Teams.team_id = ? AND strftime('%Y', meet_date) = ?;
+            Teams.name = ? AND strftime('%Y', meet_date) = ?;
         '''
 
-    cursor.execute(query, (team_id, year)) 
+    cursor.execute(query, (school, year)) 
     results1 = cursor.fetchall()
 
     athlete_ids = list(set([x[0] for x in results1]))
@@ -559,34 +560,33 @@ def get_prs_for_school(school, year, conn):
     #format_records(results)
     return results
 
+def get_prs_for_school2(school, year, conn):
+    '''Find all participants in a school in a particular year. Then get their PRs.'''
 
-def get_school_records(school, conn):
-    '''Return a list of events and the records for each from a particular school.
-    The school is the text that should match what's in the 'Teams' table.'''
+    cursor = conn.cursor()
+    query = '''
+        SELECT
+            E.name AS event_name,
+            A.name AS athlete_name,
+            strftime('%Y-%m-%d', M.meet_date),
+            M.location,
+            R.result_orig AS result,
+            MIN(R.result_sort) AS result_sort
+        FROM
+            Results R
+            INNER JOIN Teams ON Teams.team_id = R.team_id
+            INNER JOIN Athletes A ON A.athlete_id = R.athlete_id
+            INNER JOIN Events E ON E.event_id = R.event_id
+            INNER JOIN Meets M ON M.meet_id = R.meet_id
+        WHERE Teams.name = ? AND strftime('%Y', meet_date) = ?
+              
+        GROUP BY athlete_name, event_name;
+        '''
 
-    team_id = get_team_id(school, conn)
+    cursor.execute(query, (school, year)) 
+    results = cursor.fetchall()
 
-    #print('team_id = {}'.format(team_id))
-
-    # Now, need to get all the results from this team_id
-
-    #team_results = get_result_ids_from_team_id(team_id, conn)
-    #pp(team_results)
-
-    event_ids = get_team_event_ids_from_results(team_id, conn)
-
-    results = []
-
-    # Loop on event_ids
-    # for event_id in event_ids:
-
-    #    results.append(get_school_record_for_event_id(event_id, team_id, conn))
-    results = (get_school_record_for_event_id(team_id, conn))
-
-    pp(results)
-    #format_records(results)
-
-    return(results)
+    return results
 
 def insert_data(results, conn):
    
@@ -827,10 +827,10 @@ if __name__ == "__main__":
     # athlete_ids = get_athletes_on_team("Saint Joseph Catholic School", conn)
 
     school_records = get_school_records('Saint Joseph Catholic School', conn)
-    format_records(school_records)
+    #format_records(school_records)
 
-    school_prs = get_prs_for_school('Saint Joseph Catholic School', '2024', conn)
-    #format_records(school_prs)
+    school_prs = get_prs_for_school2('Saint Joseph Catholic School', '2024', conn)
+    format_records(school_prs)
 
     #pp(athlete_ids)
 
