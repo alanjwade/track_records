@@ -496,6 +496,34 @@ def get_prs_for_single_athlete_id(athlete_id, conn):
     #pp(results)
     return results
 
+def get_prs_for_athlete_ids(athlete_ids, conn): 
+    '''athlete_ids is a list of athlete ids. Return a list of tuples.'''
+    cursor = conn.cursor()
+
+    query = '''
+        SELECT
+            E.name AS event_name,
+            A.name AS athlete_name,
+            strftime('%Y-%m-%d', M.meet_date),
+            M.location,
+            R.result_orig AS result,
+            MIN(R.result_sort) AS result_sort
+        FROM
+            Results R
+            INNER JOIN Athletes A ON A.athlete_id = R.athlete_id
+            INNER JOIN Events E ON E.event_id = R.event_id
+            INNER JOIN Meets M ON M.meet_id = R.meet_id
+        WHERE R.athlete_id IN ({})
+        GROUP BY E.name;
+        '''.format(','.join('?' * len(athlete_ids)))
+ 
+    cursor.execute(query, tuple(athlete_ids))
+
+    results = cursor.fetchall()
+
+    #pp(results)
+    return results
+
 def get_school_records(school, conn):
     '''Return a list of events and the records for each from a particular school.
     The school is the text that should match what's in the 'Teams' table.'''
@@ -543,6 +571,8 @@ def get_prs_for_school(school, year, conn):
 
     athlete_ids = list(set([x[0] for x in results1]))
 
+    #results = get_prs_for_athlete_ids(athlete_ids, conn)
+
     # Now get PRs for each athlete in turn
     results = []
     for athlete_id in athlete_ids:
@@ -578,8 +608,15 @@ def get_prs_for_school2(school, year, conn):
             INNER JOIN Athletes A ON A.athlete_id = R.athlete_id
             INNER JOIN Events E ON E.event_id = R.event_id
             INNER JOIN Meets M ON M.meet_id = R.meet_id
-        WHERE Teams.name = ? AND strftime('%Y', meet_date) = ?
-              
+        WHERE 
+            R.athlete_id IN (
+                SELECT A.athlete_id
+                FROM Results R
+                    INNER JOIN Teams ON Teams.team_id = R.team_id
+                    INNER JOIN Athletes A ON A.athlete_id = R.athlete_id
+                    INNER JOIN Events E ON E.event_id = R.event_id
+                    INNER JOIN Meets M ON M.meet_id = R.meet_id
+                WHERE Teams.name = ? AND strftime('%Y', meet_date) = ?)
         GROUP BY athlete_name, event_name;
         '''
 
@@ -826,8 +863,11 @@ if __name__ == "__main__":
     conn = sqlite3.connect(args.db)
     # athlete_ids = get_athletes_on_team("Saint Joseph Catholic School", conn)
 
-    school_records = get_school_records('Saint Joseph Catholic School', conn)
+    #school_records = get_school_records('Saint Joseph Catholic School', conn)
     #format_records(school_records)
+
+    # school_prs = get_prs_for_school('Saint Joseph Catholic School', '2024', conn)
+    # format_records(school_prs)
 
     school_prs = get_prs_for_school2('Saint Joseph Catholic School', '2024', conn)
     format_records(school_prs)
