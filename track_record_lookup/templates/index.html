@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Team Records</title>
+</head>
+<body>
+    <h1>Team Records</h1>
+    <form method="POST" action="/results">
+        <label for="team_name">Team Name:</label>
+        <select id="team_name" name="team_name">
+            <option value="">Select a Team</option>
+            {% for team in teams %}
+                <option value="{{ team['name'] }}">{{ team['name'] }}</option>
+            {% endfor %}
+        </select><br><br>
+      <input type="submit" value="Get Records">
+    </form>
+    <h1>Individual Records</h1>
+    <form method="POST" action="/select_athlete">
+        <label for="team_name">Team Name:</label>
+        <select id="team_name" name="team_name">
+            <option value="">Select a Team</option>
+            {% for team in teams %}
+                <option value="{{ team['name'] }}">{{ team['name'] }}</option>
+            {% endfor %}
+        </select><br><br>
+        <label for="year">Year:</label>
+        <select id="year" name="year">
+            <option value="">Select a Year</option>
+            {% for year in years %}
+                <option value="{{ year['year'] }}">{{ year['year'] }}</option>
+            {% endfor %}
+        </select><br><br>
+      <input type="submit" value="Pick Athlete">
+    </form>
+</body>
+</html>

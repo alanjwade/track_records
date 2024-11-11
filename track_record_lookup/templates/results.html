@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>School Records</title>
+</head>
+<body>
+    <h1>School Records for {{ school_records[0]['team_name'] }}</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Event Name</th>
+                <th>Athlete Name</th>
+                <th>School Record</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in school_records %}
+            <tr>
+                <td>{{ record['event_full_name'] }}</td>
+                <td>{{ record['athlete_name'] }}</td>
+                <td>{{ record['result'] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

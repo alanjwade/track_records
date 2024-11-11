@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Select Athlete</title>
+</head>
+<body>
+    <h1>Select Athlete from {{ team_name }}</h1>
+    <form method="POST" action="/show_records">
+        <label for="athlete_name">Select an Athlete:</label>
+        <select id="athlete_name" name="athlete_name">
+            <option value="">Select an Athlete</option>
+            {% for athlete in athletes %}
+                <option value="{{ athlete['name'] }}">{{ athlete['name'] }}</option>
+            {% endfor %}
+        </select>
+        <input type="hidden" name="team_name" value="{{ team_name }}">
+        <input type="submit" value="Show Records">
+    </form>
+</body>
+</html>

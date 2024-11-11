@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Athlete Record</title>
+</head>
+<body>
+    <h1>Athlete Records for {{ records[0]['athlete_name'] }}</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Event Name</th>
+                <th>School Record</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in records %}
+            <tr>
+                <td>{{ record['event_full_name'] }}</td>
+                <td>{{ record['result'] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

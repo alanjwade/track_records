@@ -1,19 +1,32 @@
 from flask import Flask, render_template, request, current_app, g
 import sqlite3
 from pprint import pprint
+import datetime
 
 app = Flask(__name__)
+
+
+def convert_date(val):
+    """Convert ISO 8601 date to datetime.date object."""
+    return datetime.date.fromisoformat(val)
+
+
+sqlite3.register_converter("date", convert_date)
+
 
 def get_db_connection():
     conn = sqlite3.connect("/home/alan/Documents/track/records/track_records.db")
     conn.row_factory = sqlite3.Row
     return conn
+
+
 #     if 'db' not in g:
 #         g.db = sqlite3.connect("/home/alan/Documents/track/records/track_results.db")
 # #        g.db.row_factory = sqlite3.Row
 #     return g.db
 
-@app.route('/')
+
+@app.route("/")
 def index():
 
     # Get a list of all the schools.
@@ -32,19 +45,30 @@ def index():
                                 Conferences
                              WHERE name = ?);
         """
-    
-    teams = conn.execute(query, ("NCIL", )).fetchall()
+
+    teams = conn.execute(query, ("NCIL",)).fetchall()
+    query = """
+        SELECT DISTINCT
+            strftime('%Y', meet_date) AS year
+        FROM
+            Meets;
+        """
+
+    years = conn.execute(query).fetchall()
+
+    for year in years:
+        print(year["year"])
+
+    #
+
     conn.close()
 
-    for team in teams:
-        pprint(team.keys())        
-        pprint(team['name'])
+    return render_template("index.html", teams=teams, years=years)
 
-    return render_template('index.html', teams=teams)
 
-@app.route('/results', methods=['POST'])
+@app.route("/results", methods=["POST"])
 def results():
-    school_name = request.form['team_name']
+    school_name = request.form["team_name"]
 
     print(school_name)
 
@@ -76,46 +100,82 @@ def results():
         print(school_record.keys())
         # pprint(school_record)
 
-    return render_template('results.html', school_records=school_records)
+    return render_template("results.html", school_records=school_records)
 
 
-    # query = """
-    #     SELECT
-    #         E.name AS event_name,
-    #         A.name AS athlete_name,
-    #         strftime('%Y-%m-%d', M.meet_date),
-    #         M.location,
-    #         R.result_orig AS result,
-    #         MIN(R.result_sort) AS result_sort
-    #     FROM
-    #         Results R
-    #         INNER JOIN Teams ON Teams.team_id = R.team_id
-    #         INNER JOIN Athletes A ON A.athlete_id = R.athlete_id
-    #         INNER JOIN Events E ON E.event_id = R.event_id
-    #         INNER JOIN Meets M ON M.meet_id = R.meet_id
-    #     WHERE 
-    #         R.athlete_id IN (
-    #             SELECT A.athlete_id
-    #             FROM Results R
-    #                 INNER JOIN Teams ON Teams.team_id = R.team_id
-    #                 INNER JOIN Athletes A ON A.athlete_id = R.athlete_id
-    #                 INNER JOIN Events E ON E.event_id = R.event_id
-    #                 INNER JOIN Meets M ON M.meet_id = R.meet_id
-    #             WHERE Teams.name = ? AND strftime('%Y', meet_date) = ?)
-    #     GROUP BY athlete_name, event_name;
-    #     """
-    
+@app.route("/select_athlete", methods=["POST"])
+def select_athlete():
+    team_name = request.form["team_name"]
+    year = request.form["year"]
+
+    print(team_name)
+
+    conn = get_db_connection()
+
+    # Query to find school records
+    query = """
+        SELECT DISTINCT 
+            a.name AS name
+        FROM 
+            Athletes a
+            INNER JOIN Results r ON a.athlete_id = r.athlete_id
+            INNER JOIN Teams t ON r.team_id = t.team_id
+            INNER JOIN Meets m on m.meet_id = r.meet_id
+        WHERE t.name = ?
+            AND strftime('%Y', m.meet_date) = ?;
+        """
+    athletes = conn.execute(query, (team_name, year)).fetchall()
+    conn.close()
+
+    print(len(athletes))
+
+    for athlete in athletes:
+        print(athlete["name"])
+        # pprint(school_record)
+
+    return render_template(
+        "select_athlete.html", athletes=athletes, team_name=team_name
+    )
 
 
-    # cursor.execute("""
-    #     SELECT t.name AS team_name, e.name AS event_name, MAX(r.result) AS school_record
-    #     FROM Results r
-    #     INNER JOIN Teams t ON r.team_id = t.team_id
-    #     INNER JOIN Events e ON r.event_id = e.event_id
-    #     WHERE t.name = ?
-    #     GROUP BY t.name, e.name;
-    # """, (school_name,))
+@app.route("/show_records", methods=["POST"])
+def show_records():
+    athlete_name = request.form["athlete_name"]
+    team_name = request.form["team_name"]
+
+    conn = get_db_connection()
+
+    query = """
+        SELECT 
+            Teams.name AS team_name,
+            Events.full_name AS event_full_name,
+            Athletes.name AS athlete_name,
+            Meets.meet_date,
+            Meets.location,
+            Results.result_orig AS result,
+            MIN(Results.result_sort) AS result_sort
+        FROM
+            Results
+            INNER JOIN Teams ON Teams.team_id = Results.team_id
+            INNER JOIN Athletes ON Athletes.athlete_id = Results.athlete_id
+            INNER JOIN Events ON Events.event_id = Results.event_id
+            INNER JOIN Meets ON Meets.meet_id = Results.meet_id
+        WHERE   Teams.name = ?
+            AND Athletes.name = ?
+        GROUP BY
+            Events.full_name;
+        """
+
+    records = conn.execute(query, (team_name, athlete_name)).fetchall()
+    conn.close()
+
+    for record in records:
+        print(record["athlete_name"])
+        print(record["event_full_name"])
+        # pprint(school_record)
+
+    return render_template("athlete_records.html", records=records)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
