@@ -324,6 +324,7 @@ def create_db(conn):
         """CREATE TABLE Events (
                     event_id INTEGER PRIMARY KEY,
                     name TEXT NOT NULL UNIQUE,
+                    full_name TEXT NOT NULL UNIQUE,
                     sort_order TEXT NOT NULL
                     );"""
     )
@@ -368,11 +369,11 @@ def conference(school):
             "conf": "NCIL",
         },
         "Dayspring Christian Academy": {
-            "team": 'Dayspring Christian Academy"',
+            "team": "Dayspring Christian Academy",
             "conf": "NCIL",
         },
         "Dayspring Christian Academy Middle School": {
-            "team": 'Dayspring Christian Academy"',
+            "team": 'Dayspring Christian Academy',
             "conf": "NCIL",
         },
         "Heritage Christian Academy": {
@@ -734,6 +735,8 @@ def insert_data(results, conn):
         else:
             athlete_name = team_name + " " + event_name + " relay team"
 
+        event_full_name = taghash[event_name]['name']
+
         team_conference = conference(team_name)
         team_name = team_conference["team"]
         conference_name = team_conference["conf"]
@@ -767,9 +770,9 @@ def insert_data(results, conn):
         # Now the athlete is in the DB
 
         event_query = (
-            """INSERT OR IGNORE INTO Events (name, sort_order) VALUES (?, ?)"""
+            """INSERT OR IGNORE INTO Events (name, full_name, sort_order) VALUES (?, ?, ?)"""
         )
-        cursor.execute(event_query, (event_name, event_order))
+        cursor.execute(event_query, (event_name, event_full_name, event_order))
         # Now the event is in the DB
 
         meet_query = """INSERT OR IGNORE INTO Meets (name, meet_date, location) VALUES (?, ?, ?)"""

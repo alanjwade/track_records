@@ -15,12 +15,36 @@ def get_db_connection():
 
 @app.route('/')
 def index():
-    # return "<p>Hello, World!</p>"
-    return render_template('index.html')
+
+    # Get a list of all the schools.
+
+    conn = get_db_connection()
+
+    query = """
+        SELECT
+            *
+        FROM
+            Teams
+        WHERE
+            conference_id = (SELECT
+                                conference_id
+                             FROM
+                                Conferences
+                             WHERE name = ?);
+        """
+    
+    teams = conn.execute(query, ("NCIL", )).fetchall()
+    conn.close()
+
+    for team in teams:
+        pprint(team.keys())        
+        pprint(team['name'])
+
+    return render_template('index.html', teams=teams)
 
 @app.route('/results', methods=['POST'])
 def results():
-    school_name = request.form['school_name']
+    school_name = request.form['team_name']
 
     print(school_name)
 
@@ -30,7 +54,7 @@ def results():
     query = """
         SELECT 
             Teams.name AS team_name,
-            Events.name AS event_name,
+            Events.full_name AS event_full_name,
             Athletes.name AS athlete_name,
             Meets.meet_date,
             Meets.location,
@@ -43,7 +67,7 @@ def results():
             INNER JOIN Events ON Events.event_id = Results.event_id
             INNER JOIN Meets ON Meets.meet_id = Results.meet_id
         WHERE Teams.name = ?
-        GROUP BY event_name;
+        GROUP BY event_full_name;
         """
     school_records = conn.execute(query, (school_name,)).fetchall()
     conn.close()
