@@ -3,3 +3,7 @@
 *.png
 webpages/*
 *.json
+.venv
+*pycache*
+*.pycache
+
