@@ -5,4 +5,4 @@ webpages/*
 .venv
 *pycache*
 *.pycache
-
+*.db

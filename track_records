@@ -903,7 +903,7 @@ if __name__ == "__main__":
     parser.add_argument("--hack", action="store_true")
     parser.add_argument("--populate_db", action="store_true")
     parser.add_argument(
-        "--db", default="/home/alan/Documents/track/records/track_records.db"
+        "--db", default="db/track_records.db"
     )
     args = parser.parse_args()
 

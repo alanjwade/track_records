@@ -1,3 +1,5 @@
+#!/var/www/track_records/venv/bin/python3
+
 from flask import Flask, render_template, request, current_app, g
 import sqlite3
 from pprint import pprint
@@ -15,7 +17,7 @@ sqlite3.register_converter("date", convert_date)
 
 
 def get_db_connection():
-    conn = sqlite3.connect("/home/alan/Documents/track/records/track_records.db")
+    conn = sqlite3.connect("db/track_records.db")
     conn.row_factory = sqlite3.Row
     return conn
 
