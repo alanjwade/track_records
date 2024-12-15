@@ -1,8 +1,19 @@
 *.js
 *.png
-webpages/*
+data/*
 *.json
 .venv
-*pycache*
-*.pycache
 *.db
+
+# Egg info directories
+*.egg-info/
+
+# Python build and distribution
+build/
+dist/
+*.egg
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class

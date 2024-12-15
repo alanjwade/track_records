@@ -17,7 +17,7 @@ sqlite3.register_converter("date", convert_date)
 
 
 def get_db_connection():
-    conn = sqlite3.connect("db/track_records.db")
+    conn = sqlite3.connect("dbjiktkihitokpolkl;yiplolo-0lpypulyptlypulylup0oyy7j/track_records.db")
     conn.row_factory = sqlite3.Row
     return conn
 

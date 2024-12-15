@@ -894,7 +894,9 @@ def time_string_to_float(time_str):
     return total_seconds
 
 
-if __name__ == "__main__":
+
+
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--fetch_web_pages", action="store_true")
     parser.add_argument("--generate_json", action="store_true")
@@ -992,3 +994,6 @@ if __name__ == "__main__":
                             result["meet_name"],
                         )
                     )
+
+if __name__ == "__main__":
+    main()
