@@ -8,6 +8,7 @@ import sqlite3
 import traceback
 import json
 import re
+from track_records.db_man import get_db
 
 # from requests_html import HTMLSession
 
@@ -905,9 +906,13 @@ def main():
     parser.add_argument("--hack", action="store_true")
     parser.add_argument("--populate_db", action="store_true")
     parser.add_argument(
-        "--db", default="db/track_records.db"
+        "--db", default="data/track_records.db"
     )
     args = parser.parse_args()
+
+
+    get_db(args.db)
+    exit()
 
     if args.fetch_web_pages:
         for meet in meet_arr:
