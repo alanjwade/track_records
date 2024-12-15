@@ -2,7 +2,7 @@ from pprint import pprint as pp
 import sqlite3
 from pathlib import Path
 
-def get_db(db):
+def generate_new_db(db):
 
     pp("Creating db {}".format(db))
     try:
@@ -10,5 +10,10 @@ def get_db(db):
     except:
         pass
     conn = sqlite3.connect(db)
+    return conn
 
+def get_db(db):
+    pp("Opening db {}".format(db))
 
+    conn = sqlite3.connect(db)
+    return conn
