@@ -403,5 +403,15 @@ def main():
                         )
                     )
 
+    q_school_record = q_all_team_records("St. Joseph Catholic School")
+
+    pp(q_school_record)
+    cursor = get_db(args.db).cursor()
+    cursor.execute(q_school_record, ("Saint Joseph Catholic School", ))
+    results = cursor.fetchall()
+    pp(results)
+
+
+
 if __name__ == "__main__":
     main()
