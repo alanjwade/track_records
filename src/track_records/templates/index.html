@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>NCIL Track Records</title>
+    </head>
+<head>
+    <title>Team Records</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            width: 80%;
+            margin: auto;
+            overflow: hidden;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            padding: 20px 0;
+        }
+        form {
+            background: #fff;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        label {
+            display: block;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        select, input[type="submit"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            }
+            .hidden {
+                display: none;
+            border-radius: 5px;
+        }
+        input[type="submit"] {
+            background: #333;
+            color: #fff;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Team Records</h1>
+        <form method="POST" action="/results">
+            <label for="team_name">Team Name:</label>
+            <select id="team_name" name="team_name">
+                <option value="">Select a Team</option>
+                {% for team in teams %}
+                    <option value="{{ team['name'] }}">{{ team['name'] }}</option>
+                {% endfor %}
+            </select>
+            <input type="submit" value="Get Records">
+        </form>
+        <h1>Individual Records</h1>
+        <form method="POST" action="/select_athlete">
+            <label for="team_name">Team Name:</label>
+            <select id="team_name" name="team_name">
+                <option value="">Select a Team</option>
+                {% for team in teams %}
+                    <option value="{{ team['name'] }}">{{ team['name'] }}</option>
+                {% endfor %}
+            </select>
+            <label for="year">Year:</label>
+            <select id="year" name="year">
+                <option value="">Select a Year</option>
+                {% for year in years %}
+                    <option value="{{ year['year'] }}">{{ year['year'] }}</option>
+                {% endfor %}
+            </select>
+            <label for="athlete_name">Athlete Name:</label>
+            <select id="athlete_name" name="athlete_name">
+                <option value="">Select an Athlete</option>
+                {% for athlete in athletes %}
+                    <option value="{{ athlete['name'] }}">{{ athlete['name'] }}</option>
+                {% endfor %}
+            </select>
+            <input type="submit" value="Pick Athlete">
+        </form>
+    </div>
+</body>
+</html>

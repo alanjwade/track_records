@@ -6,7 +6,7 @@ from pprint import pprint
 import datetime
 
 app = Flask(__name__)
-
+# app.template_folder = 'src/templates'
 
 def convert_date(val):
     """Convert ISO 8601 date to datetime.date object."""
@@ -30,7 +30,8 @@ def get_db_connection():
 
 @app.route("/")
 def index():
-
+    conference_name = "NCIL"
+    conference_records_link = f"/conference_records/{conference_name}"
     # Get a list of all the schools.
 
     conn = get_db_connection()
@@ -64,9 +65,27 @@ def index():
     #
 
     conn.close()
+    selected_team = request.args.get("team_name")
+    selected_year = request.args.get("year")
 
-    return render_template("index.html", teams=teams, years=years)
+    athletes = []
+    if selected_team and selected_year:
+        query = """
+            SELECT DISTINCT 
+                a.name AS name
+            FROM 
+                Athletes a
+                INNER JOIN Results r ON a.athlete_id = r.athlete_id
+                INNER JOIN Teams t ON r.team_id = t.team_id
+                INNER JOIN Meets m on m.meet_id = r.meet_id
+            WHERE t.name = ?
+                AND strftime('%Y', m.meet_date) = ?;
+            """
+        athletes = conn.execute(query, (selected_team, selected_year)).fetchall()
 
+    conn.close()
+    return render_template("index.html", teams=teams, years=years, athletes=athletes, selected_team=selected_team, selected_year=selected_year)
+ 
 
 @app.route("/results", methods=["POST"])
 def results():
