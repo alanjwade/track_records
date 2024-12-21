@@ -2,7 +2,7 @@
 Query generation module for track records.
 """
 
-from .db_ifc import get_db, generate_new_db
+from .db_ifc import get_db, generate_new_db, query_db
 from .helper import results_html_to_results_json, \
                     results_json_to_results_db, \
                     populate_db
@@ -14,5 +14,6 @@ __all__ = [
     "results_html_to_results_json",
     "results_json_to_results_db",
     "populate_db",
-    "q_all_team_records"
+    "q_all_team_records",
+    "query_db"
 ]

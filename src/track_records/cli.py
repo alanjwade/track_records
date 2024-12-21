@@ -357,59 +357,9 @@ def main():
         populate_db(args.db)
         
 
-    # conn = sqlite3.connect(args.db)
-    # school_records = get_school_records('Saint Joseph Catholic School', conn)
-    # format_records(school_records)# athlete_ids = get_athletes_on_team("Saint Joseph Catholic School", conn)
+    all_team_records = query_db(args.db, q_all_team_records(), ("Saint Joseph Catholic School",))
+    pp(all_team_records)
 
-    # 
-
-    # school_prs = get_prs_for_school('Saint Joseph Catholic School', '2024', conn)
-    # format_records(school_prs)
-
-    # tables = conn.execute("SELECT sql FROM sqlite_schema WHERE name='Results';").fetchall()
-    # print('test')
-    # print(tables)
-    # exit()
-    # school_prs = get_prs_for_school2("Saint Joseph Catholic School", "2024", conn)
-    # format_records(school_prs)
-
-    # pp(athlete_ids)
-
-    # event_ids = get_events_for_athlete_id(503, conn)
-
-    # prs = get_personal_records(503, conn)
-
-    # pp(prs)
-#    conn.close()
-
-    if args.hack:
-
-        with open("track_results.json", "r") as f:
-            json_string = f.read()
-
-        results = json.loads(json_string)
-        print("Read track_results.json")
-
-        for result in results:
-            if result["Team"] == "Saint Joseph Catholic School":
-                #            pprint.pp(result)
-                if "Athlete" in result:
-                    print(
-                        "{:20} {:20} {:20} {:20}".format(
-                            result["Athlete"],
-                            result["event"],
-                            result["Mark"],
-                            result["meet_name"],
-                        )
-                    )
-
-    q_school_record = q_all_team_records("St. Joseph Catholic School")
-
-    pp(q_school_record)
-    cursor = get_db(args.db).cursor()
-    cursor.execute(q_school_record, ("Saint Joseph Catholic School", ))
-    results = cursor.fetchall()
-    pp(results)
 
 
 
