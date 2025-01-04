@@ -55,42 +55,36 @@
 </head>
 <body>
     <div class="container">
+        <h1>Individual Records</h1>
+        <form method="POST" action="/indv_results_select_athlete">
+            <label for="team_name">Team:</label>
+            <select id="team_name" name="team_name">
+                <option value="">Select a Team</option>
+                {% for team in teams %}
+                <option value="{{ team }}">{{ team }}</option>
+                {% endfor %}
+            </select>
+            <label for="year">Year:</label>
+            <select id="year" name="year">
+                {% for year in years %}
+                    <option value="{{ year }}" {% if loop.last %}selected{% endif %}>{{ year }}</option>
+                {% endfor %}
+            </select>
+
+            <input type="submit" value="Go on to pick the athlete">
+        </form>
         <h1>Team Records</h1>
         <form method="POST" action="/results">
             <label for="team_name">Team Name:</label>
             <select id="team_name" name="team_name">
                 <option value="">Select a Team</option>
                 {% for team in teams %}
-                    <option value="{{ team['name'] }}">{{ team['name'] }}</option>
+                    <option value="{{ team }}">{{ team }}</option>
                 {% endfor %}
             </select>
             <input type="submit" value="Get Records">
         </form>
-        <h1>Individual Records</h1>
-        <form method="POST" action="/select_athlete">
-            <label for="team_name">Team Name:</label>
-            <select id="team_name" name="team_name">
-                <option value="">Select a Team</option>
-                {% for team in teams %}
-                    <option value="{{ team['name'] }}">{{ team['name'] }}</option>
-                {% endfor %}
-            </select>
-            <label for="year">Year:</label>
-            <select id="year" name="year">
-                <option value="">Select a Year</option>
-                {% for year in years %}
-                    <option value="{{ year['year'] }}">{{ year['year'] }}</option>
-                {% endfor %}
-            </select>
-            <label for="athlete_name">Athlete Name:</label>
-            <select id="athlete_name" name="athlete_name">
-                <option value="">Select an Athlete</option>
-                {% for athlete in athletes %}
-                    <option value="{{ athlete['name'] }}">{{ athlete['name'] }}</option>
-                {% endfor %}
-            </select>
-            <input type="submit" value="Pick Athlete">
-        </form>
+
     </div>
 </body>
 </html>

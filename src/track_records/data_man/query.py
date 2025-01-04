@@ -68,10 +68,29 @@ def q_athlete_records():
             INNER JOIN Events ON Events.event_id = Results.event_id
             INNER JOIN Meets ON Meets.meet_id = Results.meet_id
         WHERE Athletes.name = ?
+            AND Teams.name = ?
         GROUP BY event_name;
         """
     return query
 
+def q_all_teams_in_conference():
+    query = """
+        SELECT 
+            Teams.name AS team_name
+        FROM
+            Teams
+            INNER JOIN Conferences ON Conferences.conference_id = Teams.conference_id
+        WHERE Conferences.name = ?;
+        """
+    return query
+
+def q_years_records_are_available():
+    query = """
+        SELECT DISTINCT strftime('%Y', Meets.meet_date) AS year
+        FROM Meets
+        ORDER BY year DESC;
+        """
+    return query
 
 def q_all_athletes_on_team_records():
     pass
@@ -105,3 +124,17 @@ def q_all_athletes_on_team_in_one_year_records():
         """
     return query
 
+def q_all_athletes_on_team_in_one_year():
+    query = """
+        SELECT DISTINCT 
+            Athletes.name AS athlete_name
+        FROM
+            Results
+            INNER JOIN Teams ON Teams.team_id = Results.team_id
+            INNER JOIN Athletes ON Athletes.athlete_id = Results.athlete_id
+            INNER JOIN Meets ON Meets.meet_id = Results.meet_id
+        WHERE 
+            Teams.name = ? AND 
+            strftime('%Y', Meets.meet_date) = ?;
+        """
+    return query

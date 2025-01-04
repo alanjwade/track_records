@@ -4,6 +4,24 @@ from flask import Flask, render_template, request, current_app, g
 import sqlite3
 from pprint import pprint
 import datetime
+from track_records.data_man import *
+
+'''request structure:
+index.html
+    individual records
+    pick team, go to indv_results_select_year.html
+
+    team records
+    pick team, go to results.html
+
+    NCIL conference records
+    go to conference_records.html
+
+indv_results_select_year.html
+    pick year, go to select_athlete.html
+
+'''
+
 
 app = Flask(__name__)
 # app.template_folder = 'src/templates'
@@ -31,60 +49,15 @@ def get_db_connection():
 @app.route("/")
 def index():
     conference_name = "NCIL"
-    conference_records_link = f"/conference_records/{conference_name}"
-    # Get a list of all the schools.
 
-    conn = get_db_connection()
+    teams_raw = query_db("data/track_records.sqlite", q_all_teams_in_conference(), (conference_name,))
+    teams = [team["team_name"] for team in teams_raw]
+    years_raw = query_db("data/track_records.sqlite", q_years_records_are_available())
+    years = [year["year"] for year in years_raw]
 
-    query = """
-        SELECT
-            *
-        FROM
-            Teams
-        WHERE
-            conference_id = (SELECT
-                                conference_id
-                             FROM
-                                Conferences
-                             WHERE name = ?);
-        """
+    return render_template("index.html", teams=teams, years=years)
 
-    teams = conn.execute(query, ("NCIL",)).fetchall()
-    query = """
-        SELECT DISTINCT
-            strftime('%Y', meet_date) AS year
-        FROM
-            Meets;
-        """
 
-    years = conn.execute(query).fetchall()
-
-    for year in years:
-        print(year["year"])
-
-    #
-
-    conn.close()
-    selected_team = request.args.get("team_name")
-    selected_year = request.args.get("year")
-
-    athletes = []
-    if selected_team and selected_year:
-        query = """
-            SELECT DISTINCT 
-                a.name AS name
-            FROM 
-                Athletes a
-                INNER JOIN Results r ON a.athlete_id = r.athlete_id
-                INNER JOIN Teams t ON r.team_id = t.team_id
-                INNER JOIN Meets m on m.meet_id = r.meet_id
-            WHERE t.name = ?
-                AND strftime('%Y', m.meet_date) = ?;
-            """
-        athletes = conn.execute(query, (selected_team, selected_year)).fetchall()
-
-    conn.close()
-    return render_template("index.html", teams=teams, years=years, athletes=athletes, selected_team=selected_team, selected_year=selected_year)
  
 
 @app.route("/results", methods=["POST"])
@@ -124,38 +97,19 @@ def results():
     return render_template("results.html", school_records=school_records)
 
 
-@app.route("/select_athlete", methods=["POST"])
-def select_athlete():
+@app.route("/indv_results_select_athlete", methods=["POST"])
+def indv_results_select_athlete():
     team_name = request.form["team_name"]
     year = request.form["year"]
 
-    print(team_name)
+    athletes_raw = query_db("data/track_records.sqlite", q_all_athletes_on_team_in_one_year(), (team_name, year))
+    athletes = [athlete["athlete_name"] for athlete in athletes_raw]
 
-    conn = get_db_connection()
-
-    # Query to find school records
-    query = """
-        SELECT DISTINCT 
-            a.name AS name
-        FROM 
-            Athletes a
-            INNER JOIN Results r ON a.athlete_id = r.athlete_id
-            INNER JOIN Teams t ON r.team_id = t.team_id
-            INNER JOIN Meets m on m.meet_id = r.meet_id
-        WHERE t.name = ?
-            AND strftime('%Y', m.meet_date) = ?;
-        """
-    athletes = conn.execute(query, (team_name, year)).fetchall()
-    conn.close()
-
-    print(len(athletes))
-
-    for athlete in athletes:
-        print(athlete["name"])
-        # pprint(school_record)
+    pprint(athletes_raw)
+    pprint(athletes)
 
     return render_template(
-        "select_athlete.html", athletes=athletes, team_name=team_name
+        "indv_results_select_athlete.html", athletes=athletes, team_name=team_name
     )
 
 

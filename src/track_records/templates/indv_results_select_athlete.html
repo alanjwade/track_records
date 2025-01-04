@@ -10,7 +10,7 @@
         <select id="athlete_name" name="athlete_name">
             <option value="">Select an Athlete</option>
             {% for athlete in athletes %}
-                <option value="{{ athlete['name'] }}">{{ athlete['name'] }}</option>
+                <option value="{{ athlete }}">{{ athlete }}</option>
             {% endfor %}
         </select>
         <input type="hidden" name="team_name" value="{{ team_name }}">
