@@ -1,10 +1,13 @@
-#!/var/www/track_records/venv/bin/python3
+#!/var/www/track_records/.venv/bin/python3
 
 from flask import Flask, render_template, request, current_app, g
 import sqlite3
 from pprint import pprint
 import datetime
 from track_records.data_man import *
+import os
+
+DB_FILE = "/var/www/track_records/data/track_records.sqlite"
 
 '''request structure:
 index.html
@@ -35,7 +38,7 @@ sqlite3.register_converter("date", convert_date)
 
 
 def get_db_connection():
-    conn = sqlite3.connect("data/track_records.sqlite")
+    conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -50,9 +53,14 @@ def get_db_connection():
 def index():
     conference_name = "NCIL"
 
-    teams_raw = query_db("data/track_records.sqlite", q_all_teams_in_conference(), (conference_name,))
+    if not os.path.exists(DB_FILE):
+        pprint("Can't see {}.format(DB_FILE}")
+    else:
+        pprint("Can see {}.format(DB_FILE}")
+
+    teams_raw = query_db(DB_FILE, q_all_teams_in_conference(), (conference_name,))
     teams = [team["team_name"] for team in teams_raw]
-    years_raw = query_db("data/track_records.sqlite", q_years_records_are_available())
+    years_raw = query_db(DB_FILE, q_years_records_are_available())
     years = [year["year"] for year in years_raw]
 
     return render_template("index.html", teams=teams, years=years)
@@ -102,7 +110,7 @@ def indv_results_select_athlete():
     team_name = request.form["team_name"]
     year = request.form["year"]
 
-    athletes_raw = query_db("data/track_records.sqlite", q_all_athletes_on_team_in_one_year(), (team_name, year))
+    athletes_raw = query_db(DB_FILE, q_all_athletes_on_team_in_one_year(), (team_name, year))
     athletes = [athlete["athlete_name"] for athlete in athletes_raw]
 
     pprint(athletes_raw)
