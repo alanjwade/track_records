@@ -17,3 +17,4 @@ dist/
 __pycache__/
 *.py[cod]
 *$py.class
+alt/data/track_records.sqlite
