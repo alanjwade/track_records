@@ -1,8 +1,10 @@
 <?php
-// results.php
 
-// Database connection
-$db = new SQLite3('data/track_records.sqlite');
+require_once('../includes/track.php');
+trackVisit();
+
+
+require '../includes/db_connect.php';
 
 // Get team_name and year from the request
 $team_name = $_GET['team'];
@@ -33,11 +35,11 @@ $result = $stmt->execute();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Select Athletes</title>
+    <title>Select Athlete</title>
 </head>
 <body>
-    <h1>Select Athletes for <?php echo htmlspecialchars($team_name); ?> in <?php echo htmlspecialchars($year); ?></h1>
-    <form action="athlete_results.php" method="GET">
+    <h1>Select Athlete for <?php echo htmlspecialchars($team_name); ?> in <?php echo htmlspecialchars($year); ?></h1>
+    <form action="../results/athlete_results.php" method="GET">
         <input type="hidden" name="team_name" value="<?php echo htmlspecialchars($team_name); ?>">
         <input type="hidden" name="year" value="<?php echo htmlspecialchars($year); ?>">
         <div>
@@ -50,6 +52,7 @@ $result = $stmt->execute();
         <button type="submit">Submit</button>
     </form>
 </body>
+<?php require_once '../includes/footer.php'; ?>
 </html>
 
 <?php

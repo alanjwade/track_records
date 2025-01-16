@@ -357,11 +357,11 @@ def main():
         populate_db(args.db)
         
 
-    all_team_records = query_db(args.db, q_all_team_records(), ("Saint Joseph Catholic School",))
-    pp(all_team_records)
+    # all_team_records = query_db(args.db, q_all_team_records(), ("Saint Joseph Catholic School",))
+    # pp(all_team_records)
 
-
-
+    all_conference_records = query_db(args.db, q_all_conference_records(), ("NCIL",))
+    pp(all_conference_records)
 
 if __name__ == "__main__":
     main()

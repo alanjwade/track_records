@@ -4,6 +4,7 @@ data/*
 *.json
 .venv
 *.db
+*.sqlite
 
 # Egg info directories
 *.egg-info/

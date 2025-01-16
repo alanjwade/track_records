@@ -1,8 +1,11 @@
 <?php
+
+require_once(__DIR__ . '/../includes/track.php');
+trackVisit();
+
 // results.php
 
-// Database connection
-$db = new SQLite3('data/track_records.sqlite');
+require_once('../includes/db_connect.php');
 
 // Get team_name and year from the request
 $athlete_name = $_GET['athlete_name'];
@@ -10,7 +13,7 @@ $team_name = $_GET['team_name'];
 
 // Fetch athletes for the given team and year
 $sql = "SELECT 
-            Events.name AS event_name,
+            Events.full_name AS event_name,
             strftime('%Y-%m-%d', Meets.meet_date),
             Meets.location,
             Results.result_orig AS result,
@@ -52,4 +55,5 @@ $result = $stmt->execute();
         <?php endwhile; ?>
     </table>
 </body>
+<?php require_once '../includes/footer.php'; ?>
 </html>
