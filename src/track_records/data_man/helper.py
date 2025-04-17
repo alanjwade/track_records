@@ -7,6 +7,12 @@ import sqlite3
 import json
 import re
 from track_records.data_man.db_ifc import get_db, generate_new_db
+import pandas as pd
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate
 
 meet_arr = [
     {
@@ -92,6 +98,12 @@ meet_arr = [
         "url": "https://co.milesplit.com/meets/599888-ncil-championship-2024/results",
         "page_content_file": "NCIL_2024_05_10.html",
         "date": "2024-05-10",
+    },
+    {
+        "meet_name": "2025_04_05 NCIL #1",
+        "url": "https://co.milesplit.com/meets/661391-ncil-meet-1-2025/results",
+        "page_content_file": "NCIL_2025_04_05.html",
+        "date": "2025-04-05",
     },
 ]
 
@@ -180,9 +192,10 @@ def parse_track_results(one_meet):
 
     # Find the header info
     header_info = soup.find("header", class_="meet")
+    #print(header_info)
 
     venue_name = header_info.find("div", class_="venueName").text.strip()
-    # print('venue:{}'.format(venue_name))
+    #print('venue:{}'.format(venue_name))
 
     # Find the table containing results (adjust selectors based on the website structure)
     results_table = soup.find(id="resultsList")  # Replace with appropriate class or id
@@ -267,20 +280,6 @@ def get_page_content(one_meet):
 
     return True
 
-def results_json_to_results_db(dbfn):
-    '''Create and populate the db from the json file.'''
-
-    try:
-        Path(dbfn).unlink()
-    except:
-        pass
-    conn = generate_new_db(dbfn)
-    create_db(conn)
-
-    conn.close()
-
-    return True
-
 def populate_db(dbfn):
     '''populate the database'''
 
@@ -297,79 +296,6 @@ def populate_db(dbfn):
 
     conn.close()
 
-def create_db(conn):
-
-    cursor = conn.cursor()
-
-    # Create tables
-    cursor.execute(
-        """CREATE TABLE Athletes (
-                    athlete_id INTEGER PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE,
-                    team_id INTEGER,
-                    conference_id INTEGER,
-                    FOREIGN KEY (team_id) REFERENCES Teams(team_id),
-                    FOREIGN KEY (conference_id) REFERENCES Conferences(conference_id)
-                    );"""
-    )
-
-    cursor.execute(
-        """CREATE TABLE Teams (
-                    team_id INTEGER PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE,
-                    conference_id INTEGER,
-                    FOREIGN KEY (conference_id) REFERENCES Conferences(conference_id)
-                    );"""
-    )
-
-    cursor.execute(
-        """CREATE TABLE Conferences (
-                    conference_id INTEGER PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE
-                    );"""
-    )
-
-    cursor.execute(
-        """CREATE TABLE Meets (
-                    meet_id INTEGER PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE,
-                    meet_date DATE,
-                    location TEXT
-                    );"""
-    )
-
-    cursor.execute(
-        """CREATE TABLE Events (
-                    event_id INTEGER PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE,
-                    full_name TEXT NOT NULL UNIQUE,
-                    sort_order TEXT NOT NULL
-                    );"""
-    )
-
-    cursor.execute(
-        """CREATE TABLE Results (
-                    result_id INTEGER PRIMARY KEY,
-                    athlete_id INTEGER,
-                    team_id INTEGER,
-                    conference_id INTEGER,
-                    meet_id INTEGER,
-                    event_id INTEGER,
-                    result_orig TEXT,
-                    result_sort REAL,
-                    place INTEGER,
-                    FOREIGN KEY (athlete_id) REFERENCES Athletes(athlete_id),
-                    FOREIGN KEY (team_id) REFERENCES Teams(team_id),
-                    FOREIGN KEY (conference_id) REFERENCES Teams(conference_id),
-                    FOREIGN KEY (meet_id) REFERENCES Meets(meet_id),
-                    FOREIGN KEY (event_id) REFERENCES Events(event_id)
-                    );"""
-    )
-    #                    UNIQUE (athlete_id, meet_id, event_id)
-
-    conn.commit()
-
-    return conn
 
 def insert_data(results, conn):
 
@@ -569,52 +495,75 @@ def conference(school):
         },
     }
 
-    if school in conf_map.keys():
+    if school is None:
+        # Return unique team names
+        teams = set(item["team"] for item in conf_map.values())
+        return sorted(list(teams))
+    elif school in conf_map.keys():
         result = conf_map[school]
     else:
         result = {"team": school, "conf": "non-NCIL"}
     return result
 
+
+
 def time_string_to_float(time_str):
     """
-    Converts a string of the format 'm:ss.ss' or 'ss.ss' to a float representing the total time in seconds.
+    Converts a string of the format 'h:mm:ss.ss', 'm:ss.ss' or 'ss.ss' to a float representing the total time in seconds.
+    Returns None if time_str is empty or invalid format.
 
     Args:
-        time_str: A string representing the time in minutes and seconds format.
+        time_str: A string representing the time in hours, minutes and seconds format.
 
     Returns:
-        A float representing the total time in seconds.
-
-    Raises:
-        ValueError: If the input string is not in the correct format.
+        A float representing the total time in seconds, or None if invalid input.
     """
+    if not time_str or not isinstance(time_str, str):
+        return None
+        
     try:
-        # Split the string at the colon (':') if present
-        if ":" in time_str:
-            minutes, seconds = time_str.split(":")
-        else:
-            minutes = "0"
-            seconds = time_str
-    except ValueError:
-        raise ValueError("Invalid time format. Please use 'm:ss.ss' or 'ss.ss'.")
+        parts = time_str.split(":")
+        if len(parts) == 3:  # h:mm:ss.ss format
+            hours = parts[0].lstrip('0') or '0'
+            minutes = parts[1].lstrip('0') or '0'
+            seconds = parts[2]
+        elif len(parts) == 2:  # mm:ss or mm:ss.ss format
+            hours = "0"
+            minutes = parts[0].lstrip('0') or '0'
+            # Handle seconds with or without decimal point
+            if "." in parts[1]:
+                seconds = parts[1]
+            else:
+                seconds = parts[1].lstrip('0') or '0'
+        else:  # ss.ss format
+            hours = "0"
+            minutes = "0" 
+            seconds = time_str.lstrip('0') or '0'
 
-    # Convert minutes and seconds to floats
-    try:
+        # Convert to floats
+        hours = float(hours.strip())
         minutes = float(minutes.strip())
         seconds = float(seconds.strip())
-    except ValueError:
-        raise ValueError("Invalid time format. Please use 'm:ss.ss' or 'ss.ss'.")
 
-    # Calculate total time in seconds
-    total_seconds = minutes * 60 + seconds
+        # Calculate total time in seconds
+        return hours * 3600 + minutes * 60 + seconds
 
-    return total_seconds
-
+    except (ValueError, AttributeError):
+        return None
 def track_distance_to_float(td):
     """convert distances in the form of '85-11.25' to 85.90 or whatever that is."""
 
-    feet, inches_str = td.split("-")
-    inches, fraction = inches_str.split(".")
+    
+    try:
+        feet, inches_str = td.split("-")
+        if "." in inches_str:
+            inches, fraction = inches_str.split(".")
+        else:
+            inches = inches_str
+            fraction = "0"
+    except Exception as e:
+        print(f"Error parsing distance: '{td}'")
+        raise
 
     # Convert each part to a float
     feet = float(feet.strip())
@@ -627,4 +576,441 @@ def track_distance_to_float(td):
 
     return total_feet
 
+def parse_excel_results(filename):
+        """Parse Excel spreadsheet with multiple sections per sheet into DataFrame.
+        
+        Args:
+            filename (str): Excel file to parse
+            
+        Returns:
+            pd.DataFrame: Normalized results DataFrame
+        """
+        xlsx = pd.read_excel(Path("data/spreadsheets", filename), sheet_name=None, header=None, dtype={'Time': str})
+        results = []
+        
+        for sheet_name, df in xlsx.items():
+            print(f"Parsing sheet: {sheet_name}")
+            if df.empty:
+                continue
+                
+            # Track current headers and section
+            current_headers = []
+            section_start = 0
+            
+            for idx, row in df.iterrows():
+                # Check if this is a header row
+                if pd.notna(row.iloc[0]) and str(row.iloc[0]).strip() == 'Event':
+                    # Save section start and get new headers
+                    section_start = idx
+                    current_headers = [str(h) for h in row.tolist() if pd.notna(h)]
+                    current_headers = [str(h) for h in row.tolist()[:20] if pd.notna(h)]
+                    continue
 
+                    
+                # Skip empty rows
+                if all(pd.isna(row)):
+                    continue
+                    
+                # Skip if no headers set yet
+                if not current_headers:
+                    continue
+                # Skip if this is a header row
+                   
+                # Get values and create Series with current headers
+                values = row.tolist()[:len(current_headers)]
+                row_data = pd.Series(values, index=current_headers)
+                
+                # if sheet_name == '400':
+                #     pp('row: {}'.format(row_data))
+
+                # Get event name and find matching tag
+                event_name = str(row_data[current_headers[0]]).strip()
+                event_tag = None
+                
+                for tag, info in taghash.items():
+                    if info['name'].lower() in event_name.lower():
+                        event_tag = tag
+                        break
+                        
+                if event_tag is None:
+                    continue
+
+
+                # Process result based on available columns
+                result_orig = None
+                result_sort = None
+
+                try:
+                    if 'Time' in current_headers:
+
+                        if    str(row_data['Time']).startswith('DISQ') \
+                           or str(row_data['Time']).startswith('DQ') \
+                           or str(row_data['Time']).startswith('DNF') \
+                           or str(row_data['Time']).startswith('TMS') \
+                           or str(row_data['Time']).startswith('NT'):
+                            result_orig = 'NT'
+                            result_sort = 1000000
+                        else:
+                            result_orig = str(row_data['Time'])
+                            result_sort = time_string_to_float(result_orig)
+
+                    elif 'Distance Feet' in current_headers and 'Distance in' in current_headers:
+                        if pd.notna(row_data['Distance Feet']) and str(row_data['Distance Feet']) in ['DNT', 'NH', 'DNJ']:
+                            result_orig = str(row_data['Distance Feet'])
+                            result_sort = 0
+                        else:
+                            feet = int(row_data['Distance Feet']) if pd.notna(row_data['Distance Feet']) else 0
+                            inches = float(row_data['Distance in']) if pd.notna(row_data['Distance in']) else 0
+                            result_orig = f"{feet}-{inches}"
+                            result_sort = -1.0 * (feet + inches/12)
+                    elif 'Distance' in current_headers or 'Height' in current_headers:
+                        field = 'Height' if 'Height' in current_headers else 'Distance'
+                        if pd.notna(row_data[field]):
+                            if str(row_data[field]) in ['DNT', 'NH', 'DNJ']:
+                                result_orig = str(row_data[field])
+                                result_sort = 0
+                            else:
+                                dist_str = str(row_data[field]).replace('"','').replace("'","-")
+                                # If no inches specified (no hyphen), add "-0"
+                                if "-" not in dist_str:
+                                    dist_str = dist_str + "-0"
+                                if dist_str.endswith('-'):
+                                    dist_str = dist_str + '0'
+                                result_orig = dist_str
+                                result_sort = -1.0 * track_distance_to_float(dist_str)
+                except Exception as e:
+                    print("Error processing result:")
+                    pp(row_data) 
+                    raise
+                    
+                # Build athlete name
+                if 'Fname' in current_headers and 'Lname' in current_headers:
+                    athlete_name = f"{row_data['Fname']} {row_data['Lname']}".strip()
+                elif 'FName' in current_headers and 'LName' in current_headers:
+                    athlete_name = f"{row_data['FName']} {row_data['LName']}".strip()
+                else:
+                    athlete_name = row_data.get('Athlete', '')
+
+                team_mapping = {'HCAMS': 'Heritage Christian Academy',
+                                'STJMS': "St. John's Middle School",
+                                'SJSMS': 'Saint Joseph Catholic School',
+                                'ILCMS': 'Immanuel Lutheran Church',
+                                'DCAMS': 'Dayspring Christian Academy',
+                                'JFAMS': 'Jefferson Academy Middle School',
+                                'WCAMS': 'Windsor Charter Academy',
+                                'SMCSM': 'St Mary Catholic School',
+                                'RIDCS': 'Ridgeview Classical Schools',
+                                'JFAMS': 'Jefferson Academy',
+                                'SJE': 'St. John the Evangalist'}
+                
+                team_abbr = row_data.get('School', '')
+                try:
+                    team_full_name = team_mapping[team_abbr]
+
+                except:
+                    team_full_name = 'Unknown'
+                    
+                result = {
+                    'event': event_tag,
+                    'event_name': event_name,
+                    'gender': event_tag[0].lower(),  # Get first letter (m/f) of event name
+                    'Athlete': athlete_name,
+                    'school_abbr': team_abbr,
+                    'Team': team_full_name,
+                    'Mark': result_orig,
+                    'result_orig': result_orig, 
+                    'result_sort': result_sort,
+                    'venue': 'Skyline High School',
+                    'meet_name': filename.split('.')[0]
+                }
+                
+                results.append(result)
+        return pd.DataFrame(results)
+
+def assign_places(df):
+    """
+    Adds 'place' and 'team_score' columns based on sorting results within each event.
+    First place gets 10 points, followed by 8, 6, 4, 2, and 1.
+    """
+    # Initialize new columns
+    df['place'] = 0
+    df['team_score'] = 0
+    
+    # Point values for places 1-6
+    point_values = {1: 8, 2: 6, 3: 4, 4: 2, 5: 1}
+    
+    # Group by event and sort within each group
+    for event, group in df.groupby('event'):
+        # Sort ascending or descending based on event type
+        ascending = True
+        # if group['result_sort'].iloc[0] < 0:  # Field events are stored as negative values
+        #     ascending = False
+            
+        # Sort and assign places
+        sorted_group = group.sort_values('result_sort', ascending=ascending)
+        
+        # Assign places and points
+        for i, (idx, row) in enumerate(sorted_group.iterrows(), 1):
+            df.at[idx, 'place'] = i
+            if i <= 5:  # Only first 6 places get points
+                df.at[idx, 'team_score'] = point_values[i]
+                
+    return df
+
+def print_team_scores(df):
+    """Print team total scores separated by gender and show point-scoring results, and save to Excel"""
+    # Get unique teams
+    teams = df['school_abbr'].dropna().replace('', pd.NA).dropna().unique()
+    # Create mapping from abbreviations to full team names
+    team_mapping = df[['school_abbr', 'Team']].drop_duplicates().set_index('school_abbr')['Team'].to_dict()
+    # Add manual mapping for ILCMS
+    team_mapping['ILCMS'] = 'Immanuel Lutheran'
+
+    pp(team_mapping)
+
+    # Create dictionaries to store team scores by gender
+    boys_scores = {}
+    girls_scores = {}
+    
+    # Lists to store data for Excel
+    excel_data = []
+    
+    # Calculate totals for each team/gender
+    for team in teams:
+        # Boys scores
+        boys_results = df[
+            (df['school_abbr'] == team) & 
+            (df['team_score'] > 0) &
+            (df['gender'] == 'm')
+        ]
+        boys_total = boys_results['team_score'].sum()
+        
+        if boys_total > 0:
+            boys_scores[team] = boys_total
+            
+        # Girls scores 
+        girls_results = df[
+            (df['school_abbr'] == team) & 
+            (df['team_score'] > 0) &
+            (df['gender'] == 'f')
+        ]
+        girls_total = girls_results['team_score'].sum()
+        
+        if girls_total > 0:
+            girls_scores[team] = girls_total
+
+    # Print boys results and add to Excel data
+    print("\nBOYS TEAM SCORES:")
+    for team, score in sorted(boys_scores.items(), key=lambda x: x[1], reverse=True):
+        team_name = team_mapping.get(team, team)
+        print(f"\n{team_name}: {score} points")
+        
+        # Get scoring results for this team
+        team_results = df[
+            (df['school_abbr'] == team) & 
+            (df['team_score'] > 0) &
+            (df['gender'] == 'm')
+        ].sort_values('team_score', ascending=False)
+        
+        for _, result in team_results.iterrows():
+            detail = f"  {result['event_name']}: {result['Athlete']} - {result['Mark']} ({result['team_score']} points)"
+            print(detail)
+            
+            # Add to Excel data
+            excel_data.append({
+                'Gender': 'Boys',
+                'Team': team_name,
+                'Total Score': score,
+                'Event': result['event_name'],
+                'Athlete': result['Athlete'],
+                'Mark': result['Mark'],
+                'Points': result['team_score']
+            })
+        
+    print("\nGIRLS TEAM SCORES:") 
+    for team, score in sorted(girls_scores.items(), key=lambda x: x[1], reverse=True):
+        team_name = team_mapping.get(team, team)
+        print(f"\n{team_name}: {score} points")
+        
+        # Get scoring results for this team
+        team_results = df[
+            (df['school_abbr'] == team) & 
+            (df['team_score'] > 0) &
+            (df['gender'] == 'f')
+        ].sort_values('team_score', ascending=False)
+        
+        for _, result in team_results.iterrows():
+            detail = f"  {result['event_name']}: {result['Athlete']} - {result['Mark']} ({result['team_score']} points)"
+            print(detail)
+            
+            # Add to Excel data
+            excel_data.append({
+                'Gender': 'Girls',
+                'Team': team_name,
+                'Total Score': score,
+                'Event': result['event_name'],
+                'Athlete': result['Athlete'],
+                'Mark': result['Mark'],
+                'Points': result['team_score']
+            })
+
+    # Create DataFrame and save to Excel
+    excel_df = pd.DataFrame(excel_data)
+    
+    # Create Excel writer
+    with pd.ExcelWriter('team_scores.xlsx') as writer:
+        # Write summary sheet with team totals
+        summary_data = []
+        for team, score in sorted(boys_scores.items(), key=lambda x: x[1], reverse=True):
+            summary_data.append({'Gender': 'Boys', 'Team': team_mapping.get(team, team), 'Total Score': score})
+        for team, score in sorted(girls_scores.items(), key=lambda x: x[1], reverse=True):
+            summary_data.append({'Gender': 'Girls', 'Team': team_mapping.get(team, team), 'Total Score': score})
+        
+        pd.DataFrame(summary_data).to_excel(writer, sheet_name='Team Totals', index=False)
+        
+        # Write detailed results
+        excel_df.to_excel(writer, sheet_name='Detailed Results', index=False)
+
+
+def create_results_pdf(df, output_filename='meet_results.pdf', highlight=None):
+    """Create PDF of meet results using reportlab.
+    If highlight is provided, highlight rows where Team matches highlight in yellow.
+    """
+    doc = SimpleDocTemplate(output_filename, pagesize=letter)
+    styles = getSampleStyleSheet()
+    elements = []
+    # Add a header to every page
+
+    def header(canvas, doc):
+        canvas.saveState()
+        canvas.setFont('Helvetica-Bold', 12)
+        canvas.drawString(72, 750, 'NCIL Meet #2 2025_03_12')
+        canvas.restoreState()
+
+    # Redefine doc as BaseDocTemplate to allow custom PageTemplate with header
+    doc = BaseDocTemplate(output_filename, pagesize=letter)
+    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='normal')
+    template = PageTemplate(id='header_template', frames=frame, onPage=header)
+    doc.addPageTemplates([template])
+    # Create header style
+    header_style = ParagraphStyle(
+        'HeaderStyle',
+        parent=styles['Heading1'],
+        fontSize=16,
+        spaceAfter=30
+    )
+
+    # First add team scores summary page
+    elements.append(Paragraph("Team Scores Summary", header_style))
+
+    # Calculate team scores by gender
+    team_scores = {'Boys': {}, 'Girls': {}}
+    for _, row in df[df['team_score'] > 0].iterrows():
+        gender = 'Boys' if row['gender'] == 'm' else 'Girls'
+        team = row['Team']
+        if team not in team_scores[gender]:
+            team_scores[gender][team] = 0
+        team_scores[gender][team] += row['team_score']
+
+    # Create tables for boys and girls team scores
+    for gender in ['Boys', 'Girls']:
+        elements.append(Paragraph(f"\n{gender} Team Scores", header_style))
+
+        # Sort teams by score
+        sorted_teams = sorted(team_scores[gender].items(), key=lambda x: x[1], reverse=True)
+
+        # Create data for table with place column
+        data = [['Place', 'Team', 'Points']]
+        for place, (team, score) in enumerate(sorted_teams, 1):
+            data.append([str(place), team, str(int(score))])
+
+        # Create and style table
+        table = Table(data, colWidths=[50, 300, 100])
+        style = TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ])
+        table.setStyle(style)
+        elements.append(table)
+        elements.append(Paragraph("<br/><br/>", styles['Normal']))
+
+    # Add page break after summary
+    elements.append(PageBreak())
+
+    # Group by event and gender for detailed results
+    for (event_name, gender), group in df.groupby(['event_name', 'gender']):
+        # Create header
+        header = Paragraph(f"{event_name}", header_style)
+        elements.append(header)
+
+        # Determine if this is a field event
+        is_field = any(x in event_name.lower() for x in ['jump', 'shot put', 'discus'])
+        result_header = 'Distance' if is_field else 'Time'
+
+        # Create data for table
+        data = [['Place', 'Athlete', 'Team', result_header, 'Points']]
+        row_styles = []
+
+        # Add rows
+        for i, (_, row) in enumerate(group.sort_values('place').iterrows(), 1):
+            result = row['result_orig']
+            # Check if it's a time format (not DNF, NT, etc) and contains numbers
+            if result and any(c.isdigit() for c in result):
+                try:
+                    # Convert to float and format to 2 decimal places
+                    time_val = time_string_to_float(result)
+                    if time_val is not None:
+                        minutes = int(time_val // 60)
+                        seconds = time_val % 60
+                        result = f"{minutes}:{seconds:05.2f}"
+                except:
+                    pass
+
+            row_data = [
+                str(int(row['place'])),
+                row['Athlete'],
+                row['Team'],
+                result,
+                str(int(row['team_score'])) if row['team_score'] > 0 else ''
+            ]
+            data.append(row_data)
+
+            # Highlight row if Team matches highlight
+            if highlight is not None and row['Team'] == highlight:
+                # +1 because header row is at index 0
+                row_idx = i
+                row_styles.append(('BACKGROUND', (0, row_idx), (-1, row_idx), colors.yellow))
+
+        # Create table
+        table = Table(data, colWidths=[40, 200, 150, 70, 50])
+
+        # Add style
+        style = TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('ALIGN', (-1, 1), (-1, -1), 'CENTER'),
+        ] + row_styles)
+        table.setStyle(style)
+
+        elements.append(table)
+        elements.append(PageBreak())
+
+    doc.build(elements)

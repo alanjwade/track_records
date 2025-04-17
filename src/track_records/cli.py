@@ -23,28 +23,6 @@ sqlite3.register_converter('date', convert_date)
 
 
 
-
-
-def format_records(records):
-    """print out formatted records"""
-
-    for record in records:
-        # pp(record)
-        if len(record) > 3:
-            print(
-                "{:30.30s} {:30s} {:20s} {:20.20s} {:20s}".format(
-                    record[1],
-                    taghash[record[0]]["name"],
-                    record[2],
-                    record[3],
-                    record[4],
-                )
-            )
-
-
-
-
-
 def get_athletes_on_team(team_name, conn):
     """Given a text team_name, return a list of athlete_ids"""
 
@@ -328,40 +306,41 @@ def get_prs_for_school2(school, year, conn):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--fetch_web_pages", action="store_true")
     parser.add_argument("--generate_json", action="store_true")
     parser.add_argument("--generate_db", action="store_true")
     parser.add_argument("--query_db", action="store_true")
     parser.add_argument("--hack", action="store_true")
     parser.add_argument("--populate_db", action="store_true")
+    parser.add_argument("--get_athletes", action="store_true")
+    parser.add_argument("--generate_new_db", action="store_true")
     parser.add_argument(
         "--db", default="data/track_records.sqlite"
     )
     args = parser.parse_args()
 
 
-    if args.fetch_web_pages:
-        for meet in meet_arr:
-            get_page_content(meet)
-        exit()
-
+    if args.generate_new_db:
+        generate_new_db(args.db)
     if args.generate_json:
-
         results_html_to_results_json()
-
-    if args.generate_db:
-
-        results_json_to_results_db(args.db)
 
     if args.populate_db:
         populate_db(args.db)
-        
+
 
     # all_team_records = query_db(args.db, q_all_team_records(), ("Saint Joseph Catholic School",))
     # pp(all_team_records)
 
-    all_conference_records = query_db(args.db, q_all_conference_records(), ("NCIL",))
-    pp(all_conference_records)
+    # all_conference_records = query_db(args.db, q_all_conference_records(), ("NCIL",))
+    # pp(all_conference_records)
+
+    # athlete_records = execute_named_query(args.db,
+    #     "data/queries.sql",
+    #     "get_records_from_all_athletes_on_team<>_in_year<>", ("Saint Joseph Catholic School", "2024"))
+    # # pp(athlete_records)
+
+    # report = PDFReport("track_records_report.pdf")
+    # report.create_pdf(athlete_records)
 
 if __name__ == "__main__":
     main()
