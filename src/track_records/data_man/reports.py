@@ -4,6 +4,7 @@ from reportlab.platypus import Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.utils import ImageReader
 from reportlab.lib.utils import simpleSplit
+from reportlab.lib.pagesizes import landscape
 
 
 class PDFReport:
@@ -136,8 +137,12 @@ class PDFReport:
 # report.create_pdf(track_records)
 
 
-    def create_results_pdf(self, results):
+    def create_results_pdf(self, results, title_text = None):
         """Create a PDF with results organized by athlete/event with dates as columns."""
+        # Set PDF to landscape mode
+        self.canvas.setPageSize(landscape(letter))
+        self.width, self.height = landscape(letter)
+
         # Filter for results from 2024 or later
         results = [r for r in results if r['meet_date'].split('-')[0] >= '2024']
         
@@ -173,9 +178,8 @@ class PDFReport:
             table_data.append(row)
             is_best_result.append(row_best)
 
-
         # Style configuration
-        col_widths = [120, 80] + [40] * len(dates)  # Fixed widths for columns
+        col_widths = [120, 100] + [45] * len(dates)  # Fixed widths for columns
         table_style = TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -187,12 +191,14 @@ class PDFReport:
         ])
 
         # Split data into pages
-        rows_per_page = 30  # Adjust this value based on your needs
+        rows_per_page = 25  # Changed from 30 to 25
         for i in range(0, len(table_data), rows_per_page):
             page_data = [table_data[0]]  # Add header row to each page
             page_is_best = [is_best_result[0]]  # Add header row best results
-            page_data.extend(table_data[i+1:i+rows_per_page])
-            page_is_best.extend(is_best_result[i+1:i+rows_per_page])
+            # Calculate end index ensuring we don't go beyond array bounds
+            end_idx = min(i + rows_per_page, len(table_data))
+            page_data.extend(table_data[i:end_idx])  # Changed from i+1 to i
+            page_is_best.extend(is_best_result[i:end_idx])  # Changed from i+1 to i
             
             table = Table(page_data, colWidths=col_widths)
             table.setStyle(table_style)
@@ -202,12 +208,16 @@ class PDFReport:
                 for col_idx, is_best in enumerate(row_best):
                     if is_best:
                         table.setStyle(TableStyle([
-                            ('FONTNAME', (col_idx, row_idx), (col_idx, row_idx), 'Helvetica-Bold')
+                            ('FONTNAME', (col_idx, row_idx), (col_idx, row_idx), 'Helvetica-Bold'),
+                            ('BACKGROUND', (col_idx, row_idx), (col_idx, row_idx), colors.yellow)
                         ]))
 
             # Draw the table for this page
             self.canvas.setFont("Helvetica-Bold", 20)
-            self.canvas.drawString(100, self.height - 40, "Season Results")
+            if title_text is not None:
+                self.canvas.drawString(100, self.height - 40, title_text)
+            else:
+                self.canvas.drawString(100, self.height - 40, "Results (and PRs highlighted) in 2025")
             self.canvas.setFont("Helvetica", 12)
             table_width, table_height = table.wrapOn(self.canvas, self.width - 100, self.height)
             table.drawOn(self.canvas, 50, self.height - 100 - table_height)
@@ -217,3 +227,93 @@ class PDFReport:
                 self.canvas.showPage()
 
         self.canvas.save()
+        """Create a PDF with results organized by athlete/event with dates as columns."""
+        # # Set PDF to landscape mode
+        # self.canvas.setPageSize(landscape(letter))
+        # self.width, self.height = landscape(letter)
+
+        # # Filter for results from 2024 or later
+        # results = [r for r in results if r['meet_date'].split('-')[0] >= '2024']
+        
+        # # Extract all unique dates
+        # dates = sorted(list({result['meet_date'] for result in results}))
+        
+        # # Group results by athlete and event
+        # athlete_event_results = {}
+        # for result in results:
+        #     key = (result['athlete_name'], result['event_name'])
+        #     if key not in athlete_event_results:
+        #         athlete_event_results[key] = {}
+        #     athlete_event_results[key][result['meet_date']] = {
+        #         'result': result['result'],
+        #         'result_sort': result['result_sort']
+        #     }
+
+        # # Create table data and best results marker
+        # table_data = [['Athlete', 'Event'] + [date.split()[0] for date in dates]]  # Use first word of date only
+        # is_best_result = [[False] * len(table_data[0])]  # First row (headers) all False
+        
+        # for (athlete, event), date_results in sorted(athlete_event_results.items()):
+        #     row = [athlete, event]
+        #     row_best = [False, False]  # First two columns (athlete, event) always False
+        #     best_result_sort = min([date_results[d]['result_sort'] for d in date_results.keys() if date_results[d]['result_sort'] is not None], default=None)
+            
+        #     for date in dates:
+        #         result = date_results.get(date, {'result': '', 'result_sort': None})
+        #         is_best = result['result_sort'] == best_result_sort and result['result_sort'] is not None
+        #         row.append(result['result'])
+        #         row_best.append(is_best)
+            
+        #     table_data.append(row)
+        #     is_best_result.append(row_best)
+
+
+        # # Style configuration
+        # col_widths = [120, 100] + [45] * len(dates)  # Fixed widths for columns
+        # table_style = TableStyle([
+        #     ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        #     ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        #     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        #     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        #     ('FONTSIZE', (0, 0), (-1, -1), 8),  # Smaller font size
+        #     ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        #     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        # ])
+
+        # # Split data into pages
+        # rows_per_page = 30  # Adjust this value based on your needs
+        # for i in range(0, len(table_data), rows_per_page):
+        #     page_data = [table_data[0]]  # Add header row to each page
+        #     page_is_best = [is_best_result[0]]  # Add header row best results
+        #     # Calculate end index ensuring we don't go beyond array bounds
+        #     end_idx = min(i + rows_per_page, len(table_data))
+        #     page_data.extend(table_data[i:end_idx])  # Changed from i+1 to i
+        #     page_is_best.extend(is_best_result[i:end_idx])  # Changed from i+1 to i
+            
+        #     table = Table(page_data, colWidths=col_widths)
+        #     table.setStyle(table_style)
+
+        #     # Add bold style for best results
+        #     for row_idx, row_best in enumerate(page_is_best):
+        #         for col_idx, is_best in enumerate(row_best):
+        #             if is_best:
+        #                 table.setStyle(TableStyle([
+        #                     ('FONTNAME', (col_idx, row_idx), (col_idx, row_idx), 'Helvetica-Bold'),
+        #                     ('BACKGROUND', (col_idx, row_idx), (col_idx, row_idx), colors.yellow)
+        #                 ]))
+
+        #     # Draw the table for this page
+        #     self.canvas.setFont("Helvetica-Bold", 20)
+        #     if title_text is not None:
+        #         self.canvas.drawString(100, self.height - 40, title_text)
+        #     else:
+        #         self.canvas.drawString(100, self.height - 40, "Results (and PRs highlighted) in 2025")
+        #     self.canvas.setFont("Helvetica", 12)
+        #     table_width, table_height = table.wrapOn(self.canvas, self.width - 100, self.height)
+        #     table.drawOn(self.canvas, 50, self.height - 100 - table_height)
+
+        #     # Add a new page if there's more data
+        #     if i + rows_per_page < len(table_data):
+        #         self.canvas.showPage()
+
+        # self.canvas.save()

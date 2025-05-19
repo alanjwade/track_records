@@ -13,6 +13,10 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate
+import traceback
+from reportlab.lib.pagesizes import letter, landscape
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 meet_arr = [
     {
@@ -105,6 +109,30 @@ meet_arr = [
         "page_content_file": "NCIL_2025_04_05.html",
         "date": "2025-04-05",
     },
+    {
+        "meet_name": "2025_04_12 NCIL #2",
+        "url": "https://ridgeviewclassical-my.sharepoint.com/:x:/g/personal/wgrace_ridgeviewclassical_org/EYa6dHQYsX5Pu1YX0OE38SMBEbuWvPguumTsEn-sjSTDyA?e=NdtGFp",
+        "page_content_file": "NCIL_2_2025_04_12.xlsx",
+        "date": "2025-04-12",
+    },
+    {
+        "meet_name": "2025_04_26 NCIL #3",
+        "url": "https://co.milesplit.com/meets/661390-ncil-meet-3-2025/results",
+        "page_content_file": "NCIL_2025_04_26.html",
+        "date": "2025-04-26",
+    },
+    {
+        "meet_name": "2025_05_03 NCIL #4",
+        "url": "https://co.milesplit.com/meets/663469-ncil-meet-4-2025/results",
+        "page_content_file": "NCIL_2025_05_03.html",
+        "date": "2025-05-03",
+    },
+    {
+        "meet_name": "2025_05_10 NCIL Championship",
+        "url": "https://co.milesplit.com/meets/661392-ncil-championship-2025/results",
+        "page_content_file": "NCIL_2025_05_10.html",
+        "date": "2025-05-10",
+    },
 ]
 
 taghash = {
@@ -162,7 +190,11 @@ def results_html_to_results_json():
 
     results = list()
     for meet in meet_arr:
-        results = results + parse_track_results(meet)
+        if meet['page_content_file'].endswith('.html'):
+            results = results + parse_track_results(meet)
+        elif meet['page_content_file'].endswith('.xlsx'):
+            results = results + parse_excel_results(meet['page_content_file'], return_as_df=False, meet_info=meet)
+            
 
     json_string = json.dumps(results, indent=4)
 
@@ -240,6 +272,7 @@ def parse_track_results(one_meet):
             result_dict["event_name"] = event_name
             result_dict["meet_name"] = one_meet["meet_name"]
             result_dict["meet_date"] = one_meet["date"]
+            result_dict["school_abbr"] = None
 
             for index in range(0, len(event_cols)):
                 result_dict[event_cols[index]] = cells[index].text.strip()
@@ -298,7 +331,15 @@ def populate_db(dbfn):
 
 
 def insert_data(results, conn):
-
+    # List of keys from 'result' that are used in this function:
+    # - "event_name"
+    # - "event"
+    # - "Team"
+    # - "Athlete"
+    # - "meet_name"
+    # - "meet_date"
+    # - "Mark"
+    # - "venue"
     cursor = conn.cursor()
 
     for result in results:
@@ -340,7 +381,8 @@ def insert_data(results, conn):
         conference_name = team_conference["conf"]
 
         mark = result["Mark"]
-        place = result["venue"]
+        if "Place" in result.keys():
+            place = result["Place"]
         meet_name = result["meet_name"]
 
         #        pp(event_name)
@@ -407,7 +449,13 @@ def insert_data(results, conn):
                                                 place)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
 
-        if "-" in mark:
+        if     mark.startswith('DISQ') \
+            or mark.startswith('DQ') \
+            or mark.startswith('DNF') \
+            or mark.startswith('TMS') \
+            or mark.startswith('NT'):
+            mark_sort = 1000000
+        elif "-" in mark:
             # it's a distance
             mark_sort = -1.0 * track_distance_to_float(mark)
         else:
@@ -493,6 +541,14 @@ def conference(school):
             "team": "Windsor Charter Academy",
             "conf": "NCIL",
         },
+        "Jefferson Academy Middle School": {
+            "team": "Jefferson Academy Middle School",
+            "conf": "NCIL",
+        },
+        "Global Village Academy - North": {
+            "team": "Global Village Academy - North",
+            "conf": "NCIL",
+        },
     }
 
     if school is None:
@@ -576,156 +632,184 @@ def track_distance_to_float(td):
 
     return total_feet
 
-def parse_excel_results(filename):
-        """Parse Excel spreadsheet with multiple sections per sheet into DataFrame.
+def parse_excel_results(filename, return_as_df=True, meet_info=None):
+    """Parse Excel spreadsheet with multiple sections per sheet into DataFrame.
+    
+    Args:
+        filename (str): Excel file to parse
         
-        Args:
-            filename (str): Excel file to parse
+    Returns:
+        pd.DataFrame: Normalized results DataFrame
+    """
+    xlsx = pd.read_excel(Path("data/spreadsheets", filename), sheet_name=None, header=None, dtype={'Time': str})
+    results = []
+    
+    for sheet_name, df in xlsx.items():
+        print(f"Parsing sheet: {sheet_name}")
+        if df.empty:
+            continue
             
-        Returns:
-            pd.DataFrame: Normalized results DataFrame
-        """
-        xlsx = pd.read_excel(Path("data/spreadsheets", filename), sheet_name=None, header=None, dtype={'Time': str})
-        results = []
+        # Track current headers and section
+        current_headers = []
+        section_start = 0
         
-        for sheet_name, df in xlsx.items():
-            print(f"Parsing sheet: {sheet_name}")
-            if df.empty:
+        for idx, row in df.iterrows():
+            # Check if this is a header row
+            if pd.notna(row.iloc[0]) and str(row.iloc[0]).strip() == 'Event':
+                # Save section start and get new headers
+                section_start = idx
+                current_headers = [str(h) for h in row.tolist() if pd.notna(h)]
+                current_headers = [str(h) for h in row.tolist()[:20] if pd.notna(h)]
+                continue
+
+                
+            # Skip empty rows
+            if all(pd.isna(row)):
                 continue
                 
-            # Track current headers and section
-            current_headers = []
-            section_start = 0
+            # Skip if no headers set yet
+            if not current_headers:
+                continue
+            # Skip if this is a header row
+                
+            # Get values and create Series with current headers
+            values = row.tolist()[:len(current_headers)]
+            row_data = pd.Series(values, index=current_headers)
             
-            for idx, row in df.iterrows():
-                # Check if this is a header row
-                if pd.notna(row.iloc[0]) and str(row.iloc[0]).strip() == 'Event':
-                    # Save section start and get new headers
-                    section_start = idx
-                    current_headers = [str(h) for h in row.tolist() if pd.notna(h)]
-                    current_headers = [str(h) for h in row.tolist()[:20] if pd.notna(h)]
-                    continue
+            # if sheet_name == '400':
+            #     pp('row: {}'.format(row_data))
 
+            # Get event name and find matching tag
+            event_name = str(row_data[current_headers[0]]).strip()
+            event_tag = None
+            
+            for tag, info in taghash.items():
+                if info['name'].lower() in event_name.lower():
+                    event_tag = tag
+                    break
                     
-                # Skip empty rows
-                if all(pd.isna(row)):
-                    continue
-                    
-                # Skip if no headers set yet
-                if not current_headers:
-                    continue
-                # Skip if this is a header row
-                   
-                # Get values and create Series with current headers
-                values = row.tolist()[:len(current_headers)]
-                row_data = pd.Series(values, index=current_headers)
-                
-                # if sheet_name == '400':
-                #     pp('row: {}'.format(row_data))
-
-                # Get event name and find matching tag
-                event_name = str(row_data[current_headers[0]]).strip()
-                event_tag = None
-                
-                for tag, info in taghash.items():
-                    if info['name'].lower() in event_name.lower():
-                        event_tag = tag
-                        break
-                        
-                if event_tag is None:
-                    continue
+            if event_tag is None:
+                continue
 
 
-                # Process result based on available columns
-                result_orig = None
-                result_sort = None
+            # Process result based on available columns
+            result_orig = None
+            result_sort = None
 
-                try:
-                    if 'Time' in current_headers:
+            try:
+                if 'Time' in current_headers:
 
-                        if    str(row_data['Time']).startswith('DISQ') \
-                           or str(row_data['Time']).startswith('DQ') \
-                           or str(row_data['Time']).startswith('DNF') \
-                           or str(row_data['Time']).startswith('TMS') \
-                           or str(row_data['Time']).startswith('NT'):
-                            result_orig = 'NT'
-                            result_sort = 1000000
-                        else:
-                            result_orig = str(row_data['Time'])
-                            result_sort = time_string_to_float(result_orig)
+                    if    str(row_data['Time']).startswith('DISQ') \
+                        or str(row_data['Time']).startswith('DQ') \
+                        or str(row_data['Time']).startswith('DNF') \
+                        or str(row_data['Time']).startswith('TMS') \
+                        or str(row_data['Time']).startswith('NT'):
+                        result_orig = 'NT'
+                        result_sort = 1000000
+                    else:
+                        result_orig = str(row_data['Time'])
+                        if '.' in result_orig:
+                            # Limit to 2 digits after the decimal point
+                            parts = result_orig.split('.')
+                            result_orig = parts[0] + '.' + parts[1][:2]
+                        result_sort = time_string_to_float(result_orig)
 
-                    elif 'Distance Feet' in current_headers and 'Distance in' in current_headers:
-                        if pd.notna(row_data['Distance Feet']) and str(row_data['Distance Feet']) in ['DNT', 'NH', 'DNJ']:
-                            result_orig = str(row_data['Distance Feet'])
+                elif 'Distance Feet' in current_headers and 'Distance in' in current_headers:
+                    if pd.notna(row_data['Distance Feet']) and str(row_data['Distance Feet']) in ['DNT', 'NH', 'DNJ']:
+                        result_orig = str(row_data['Distance Feet'])
+                        result_sort = 0
+                    else:
+                        feet = int(row_data['Distance Feet']) if pd.notna(row_data['Distance Feet']) else 0
+                        inches = float(row_data['Distance in']) if pd.notna(row_data['Distance in']) else 0
+                        result_orig = f"{feet}-{inches}"
+                        result_sort = -1.0 * (feet + inches/12)
+                elif 'Distance' in current_headers or 'Height' in current_headers:
+                    field = 'Height' if 'Height' in current_headers else 'Distance'
+                    if pd.notna(row_data[field]):
+                        if str(row_data[field]) in ['DNT', 'NH', 'DNJ']:
+                            result_orig = str(row_data[field])
                             result_sort = 0
                         else:
-                            feet = int(row_data['Distance Feet']) if pd.notna(row_data['Distance Feet']) else 0
-                            inches = float(row_data['Distance in']) if pd.notna(row_data['Distance in']) else 0
-                            result_orig = f"{feet}-{inches}"
-                            result_sort = -1.0 * (feet + inches/12)
-                    elif 'Distance' in current_headers or 'Height' in current_headers:
-                        field = 'Height' if 'Height' in current_headers else 'Distance'
-                        if pd.notna(row_data[field]):
-                            if str(row_data[field]) in ['DNT', 'NH', 'DNJ']:
-                                result_orig = str(row_data[field])
-                                result_sort = 0
-                            else:
-                                dist_str = str(row_data[field]).replace('"','').replace("'","-")
-                                # If no inches specified (no hyphen), add "-0"
-                                if "-" not in dist_str:
-                                    dist_str = dist_str + "-0"
-                                if dist_str.endswith('-'):
-                                    dist_str = dist_str + '0'
-                                result_orig = dist_str
-                                result_sort = -1.0 * track_distance_to_float(dist_str)
-                except Exception as e:
-                    print("Error processing result:")
-                    pp(row_data) 
-                    raise
-                    
-                # Build athlete name
-                if 'Fname' in current_headers and 'Lname' in current_headers:
-                    athlete_name = f"{row_data['Fname']} {row_data['Lname']}".strip()
-                elif 'FName' in current_headers and 'LName' in current_headers:
-                    athlete_name = f"{row_data['FName']} {row_data['LName']}".strip()
-                else:
-                    athlete_name = row_data.get('Athlete', '')
-
-                team_mapping = {'HCAMS': 'Heritage Christian Academy',
-                                'STJMS': "St. John's Middle School",
-                                'SJSMS': 'Saint Joseph Catholic School',
-                                'ILCMS': 'Immanuel Lutheran Church',
-                                'DCAMS': 'Dayspring Christian Academy',
-                                'JFAMS': 'Jefferson Academy Middle School',
-                                'WCAMS': 'Windsor Charter Academy',
-                                'SMCSM': 'St Mary Catholic School',
-                                'RIDCS': 'Ridgeview Classical Schools',
-                                'JFAMS': 'Jefferson Academy',
-                                'SJE': 'St. John the Evangalist'}
+                            dist_str = str(row_data[field]).replace('"','').replace("'","-")
+                            # If no inches specified (no hyphen), add "-0"
+                            if "-" not in dist_str:
+                                dist_str = dist_str + "-0"
+                            if dist_str.endswith('-'):
+                                dist_str = dist_str + '0'
+                            result_orig = dist_str
+                            result_sort = -1.0 * track_distance_to_float(dist_str)
+            except Exception as e:
+                print("Error processing result:")
+                pp(row_data) 
+                raise
                 
-                team_abbr = row_data.get('School', '')
-                try:
-                    team_full_name = team_mapping[team_abbr]
+            # Build athlete name
+            if 'Fname' in current_headers and 'Lname' in current_headers:
+                athlete_name = f"{row_data['Fname']} {row_data['Lname']}".strip()
+            elif 'FName' in current_headers and 'LName' in current_headers:
+                athlete_name = f"{row_data['FName']} {row_data['LName']}".strip()
+            else:
+                athlete_name = row_data.get('Athlete', '')
 
-                except:
-                    team_full_name = 'Unknown'
-                    
-                result = {
-                    'event': event_tag,
-                    'event_name': event_name,
-                    'gender': event_tag[0].lower(),  # Get first letter (m/f) of event name
-                    'Athlete': athlete_name,
-                    'school_abbr': team_abbr,
-                    'Team': team_full_name,
-                    'Mark': result_orig,
-                    'result_orig': result_orig, 
-                    'result_sort': result_sort,
-                    'venue': 'Skyline High School',
-                    'meet_name': filename.split('.')[0]
-                }
+            team_mapping = {'HCAMS': 'Heritage Christian Academy',
+                            'STJMS': "St. John's Middle School",
+                            'SJSMS': 'Saint Joseph Catholic School',
+                            'ILCMS': 'Immanuel Lutheran Church',
+                            'DCAMS': 'Dayspring Christian Academy',
+                            'JFAMS': 'Jefferson Academy Middle School',
+                            'WCAMS': 'Windsor Charter Academy',
+                            'SMCSM': 'St Mary Catholic School',
+                            'RIDCS': 'Ridgeview Classical Schools',
+                            'JFAMS': 'Jefferson Academy',
+                            'SJE': 'St. John the Evangalist'}
+            
+            team_abbr = row_data.get('TeamID', '')
+            try:
+                team_full_name = team_mapping[team_abbr]
+
+            except:
+                team_full_name = 'Unknown'
+
+                # track_records.sqlite3 to results mapping:
+                # Events.name <=> result.event (event_tag, like 'm100m')
+                # Events.full_name <=> result.event_name (full name, like 'mens 100m')
+                # Atheletes.name <=> result.Athlete (athlete name)
+                # Teams.name <=> result.Team (Saint Joseph Catholic School)
+                # Teams.conference_id <=> don't have one here
+                # Results.results_orig <=> result.result_orig (raw result)
+                # Results.result_sort <=> result.result_sort (converted result)
+                # Results.place <=> result.venue (place in event)
+
+                # Items needed for json:
+                # - "event_name"
+                # - "event"
+                # - "Team"
+                # - "Athlete"
+                # - "meet_name"
+                # - "meet_date"
+                # - "Mark"
+                # - "venue"
                 
-                results.append(result)
+            result = {
+                'event': event_tag,
+                'event_name': event_name,
+                'gender': event_tag[0].lower(),  # Get first letter (m/f) of event name
+                'Athlete': athlete_name,
+                'school_abbr': team_abbr if pd.notna(team_abbr) else None,
+                'Team': team_full_name,
+                'Mark': result_orig,
+                'result_orig': result_orig, 
+                'result_sort': result_sort,
+                'venue': 'Skyline High School',
+                'meet_name': meet_info['meet_name'] if meet_info and 'meet_name' in meet_info else filename.split('.')[0],
+                'meet_date': meet_info['date'] if meet_info and 'date' in meet_info else filename.split('.')[0],
+            }
+            
+            results.append(result)
+    if return_as_df:
         return pd.DataFrame(results)
+    else:
+        return results
 
 def assign_places(df):
     """
@@ -875,30 +959,43 @@ def print_team_scores(df):
 def create_results_pdf(df, output_filename='meet_results.pdf', highlight=None):
     """Create PDF of meet results using reportlab.
     If highlight is provided, highlight rows where Team matches highlight in yellow.
+    If highlight == 'all', assign a color to each team and highlight accordingly.
     """
     doc = SimpleDocTemplate(output_filename, pagesize=letter)
     styles = getSampleStyleSheet()
     elements = []
-    # Add a header to every page
 
     def header(canvas, doc):
         canvas.saveState()
-        canvas.setFont('Helvetica-Bold', 12)
-        canvas.drawString(72, 750, 'NCIL Meet #2 2025_03_12')
+        canvas.setFont('Helvetica-Bold', 24)
+        canvas.drawString(72, 750, 'NCIL Meet #2 2025_04_12')
         canvas.restoreState()
 
-    # Redefine doc as BaseDocTemplate to allow custom PageTemplate with header
     doc = BaseDocTemplate(output_filename, pagesize=letter)
     frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='normal')
     template = PageTemplate(id='header_template', frames=frame, onPage=header)
     doc.addPageTemplates([template])
-    # Create header style
+
     header_style = ParagraphStyle(
         'HeaderStyle',
         parent=styles['Heading1'],
         fontSize=16,
         spaceAfter=30
     )
+
+    # Prepare team color mapping if highlight == 'all'
+    team_colors = {}
+    if highlight == 'all':
+        # Use a palette of distinguishable colors
+        palette = [
+            colors.yellow, colors.lightblue, colors.lightgreen, colors.lavender,
+            colors.beige, colors.khaki, colors.lightcoral, colors.lightcyan,
+            colors.lightpink, colors.lightgrey, colors.orange, colors.aquamarine,
+            colors.wheat, colors.thistle, colors.mistyrose, colors.honeydew
+        ]
+        teams = sorted(df['Team'].dropna().unique())
+        for i, team in enumerate(teams):
+            team_colors[team] = palette[i % len(palette)]
 
     # First add team scores summary page
     elements.append(Paragraph("Team Scores Summary", header_style))
@@ -916,15 +1013,17 @@ def create_results_pdf(df, output_filename='meet_results.pdf', highlight=None):
     for gender in ['Boys', 'Girls']:
         elements.append(Paragraph(f"\n{gender} Team Scores", header_style))
 
-        # Sort teams by score
         sorted_teams = sorted(team_scores[gender].items(), key=lambda x: x[1], reverse=True)
-
-        # Create data for table with place column
         data = [['Place', 'Team', 'Points']]
+        row_styles = []
+
         for place, (team, score) in enumerate(sorted_teams, 1):
             data.append([str(place), team, str(int(score))])
+            if highlight == 'all' and team in team_colors:
+                row_styles.append(('BACKGROUND', (0, place), (-1, place), team_colors[team]))
+            elif highlight is not None and highlight != 'all' and team == highlight:
+                row_styles.append(('BACKGROUND', (0, place), (-1, place), colors.yellow))
 
-        # Create and style table
         table = Table(data, colWidths=[50, 300, 100])
         style = TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
@@ -938,35 +1037,40 @@ def create_results_pdf(df, output_filename='meet_results.pdf', highlight=None):
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
             ('FONTSIZE', (0, 1), (-1, -1), 10),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ])
+        ] + row_styles)
         table.setStyle(style)
         elements.append(table)
         elements.append(Paragraph("<br/><br/>", styles['Normal']))
 
-    # Add page break after summary
     elements.append(PageBreak())
 
     # Group by event and gender for detailed results
-    for (event_name, gender), group in df.groupby(['event_name', 'gender']):
-        # Create header
+    # Sort by gender first, then by event order as in taghash
+    tag_order = {v['name']: i for i, v in enumerate(taghash.values())}
+    # Prepare a list of (event_name, gender) tuples in desired order
+    event_gender_order = sorted(
+        df.groupby(['event_name', 'gender']).groups.keys(),
+        key=lambda x: (
+            x[1],  # gender first ('f' before 'm')
+            tag_order.get(x[0], 9999)
+        )
+    )
+
+    for event_name, gender in event_gender_order:
+        group = df[(df['event_name'] == event_name) & (df['gender'] == gender)]
         header = Paragraph(f"{event_name}", header_style)
         elements.append(header)
 
-        # Determine if this is a field event
         is_field = any(x in event_name.lower() for x in ['jump', 'shot put', 'discus'])
         result_header = 'Distance' if is_field else 'Time'
 
-        # Create data for table
         data = [['Place', 'Athlete', 'Team', result_header, 'Points']]
         row_styles = []
 
-        # Add rows
         for i, (_, row) in enumerate(group.sort_values('place').iterrows(), 1):
             result = row['result_orig']
-            # Check if it's a time format (not DNF, NT, etc) and contains numbers
             if result and any(c.isdigit() for c in result):
                 try:
-                    # Convert to float and format to 2 decimal places
                     time_val = time_string_to_float(result)
                     if time_val is not None:
                         minutes = int(time_val // 60)
@@ -984,16 +1088,14 @@ def create_results_pdf(df, output_filename='meet_results.pdf', highlight=None):
             ]
             data.append(row_data)
 
-            # Highlight row if Team matches highlight
-            if highlight is not None and row['Team'] == highlight:
-                # +1 because header row is at index 0
+            if highlight == 'all' and row['Team'] in team_colors:
+                row_idx = i
+                row_styles.append(('BACKGROUND', (0, row_idx), (-1, row_idx), team_colors[row['Team']]))
+            elif highlight is not None and highlight != 'all' and row['Team'] == highlight:
                 row_idx = i
                 row_styles.append(('BACKGROUND', (0, row_idx), (-1, row_idx), colors.yellow))
 
-        # Create table
         table = Table(data, colWidths=[40, 200, 150, 70, 50])
-
-        # Add style
         style = TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -1014,3 +1116,108 @@ def create_results_pdf(df, output_filename='meet_results.pdf', highlight=None):
         elements.append(PageBreak())
 
     doc.build(elements)
+
+
+    def create_award_certificate_pdf(pr_table, name, output_filename='award_certificate.pdf', places_table=None):
+        """
+        Create an award certificate PDF in landscape mode.
+        pr_table: list of dicts with keys ['event', 'mark', 'date']
+        name: recipient's name (string)
+        places_table: optional, list of dicts with keys ['event', 'mark', 'place']
+        """
+
+        doc = SimpleDocTemplate(
+            output_filename,
+            pagesize=landscape(letter),
+            rightMargin=72, leftMargin=72,
+            topMargin=72, bottomMargin=72
+        )
+        styles = getSampleStyleSheet()
+        elements = []
+
+        # Title
+        title_style = ParagraphStyle(
+            'Title',
+            parent=styles['Title'],
+            fontSize=48,
+            alignment=TA_CENTER,
+            spaceAfter=24,
+            leading=54,
+            fontName='Helvetica-Bold'
+        )
+        elements.append(Paragraph("Award Certificate", title_style))
+
+        # Presented To
+        presented_style = ParagraphStyle(
+            'PresentedTo',
+            parent=styles['Heading2'],
+            fontSize=24,
+            alignment=TA_CENTER,
+            spaceAfter=12,
+            leading=28,
+            fontName='Helvetica'
+        )
+        elements.append(Paragraph("Presented To", presented_style))
+
+        # Name
+        name_style = ParagraphStyle(
+            'Name',
+            parent=styles['Heading1'],
+            fontSize=36,
+            alignment=TA_CENTER,
+            spaceAfter=36,
+            leading=40,
+            fontName='Helvetica-Bold'
+        )
+        elements.append(Paragraph(name, name_style))
+
+        # PR Table
+        pr_data = [['Event', 'Mark', 'Date']]
+        for rec in pr_table:
+            pr_data.append([rec['event'], rec['mark'], rec['date']])
+        pr_table_style = TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 18),
+            ('FONTSIZE', (0, 1), (-1, -1), 16),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+        ])
+        pr_table_obj = Table(pr_data, colWidths=[220, 120, 120])
+        pr_table_obj.setStyle(pr_table_style)
+        elements.append(pr_table_obj)
+        elements.append(Spacer(1, 24))
+
+        # Places Table (optional)
+        if places_table:
+            places_data = [['Event', 'Mark', 'Place']]
+            for rec in places_table:
+                places_data.append([rec['event'], rec['mark'], str(rec['place'])])
+            places_table_style = TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 18),
+                ('FONTSIZE', (0, 1), (-1, -1), 16),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ])
+            places_table_obj = Table(places_data, colWidths=[220, 120, 120])
+            places_table_obj.setStyle(places_table_style)
+            elements.append(Spacer(1, 12))
+            elements.append(Paragraph("Championship Places", styles['Heading2']))
+            elements.append(places_table_obj)
+            elements.append(Spacer(1, 24))
+
+        # Footer with date and coach
+        def footer(canvas, doc):
+            canvas.saveState()
+            canvas.setFont('Helvetica', 16)
+            canvas.drawString(72, 36, "May 12th, 2025")
+            canvas.drawRightString(doc.pagesize[0] - 72, 36, "Coach Alan Wade")
+            canvas.restoreState()
+
+        doc.build(elements, onFirstPage=footer, onLaterPages=footer)
