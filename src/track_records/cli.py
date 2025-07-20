@@ -318,14 +318,22 @@ def main():
     )
     args = parser.parse_args()
 
+    db_params = {
+        'dbname': 'track_records',
+        'user': 'user',
+        'password': 'password',
+        'host': 'localhost',
+        'port': 5432
+    }
+
 
     if args.generate_new_db:
-        generate_new_db(args.db)
+        generate_new_db(db_params)
     if args.generate_json:
         results_html_to_results_json()
 
     if args.populate_db:
-        populate_db(args.db)
+        populate_db(db_params)
 
 
     # all_team_records = query_db(args.db, q_all_team_records(), ("Saint Joseph Catholic School",))

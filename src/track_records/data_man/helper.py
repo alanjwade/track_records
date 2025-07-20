@@ -344,100 +344,81 @@ def insert_data(results, conn):
 
     for result in results:
 
-        #      pp(result)
-
         event_name = result["event_name"]
         event_order = "asc"
         event_tag = result["event"]
         found = False
 
-        # Find the normalized event in the taghash
-        for norm_event in taghash.keys():
-            #            print('{}:{}'.format(norm_event, event_tag))
-            if norm_event in event_tag:
-                event_name = norm_event
-                event_order = taghash[norm_event]["order"]
-                found = True
-                break
-
-        if found == False:
-            if "m100h" in event_tag:
-                event_name = "m110h"
-                event_order = "asc"
-            else:
-                pp(result)
-                exit()
-
-        team_name = result["Team"]
-        if "Athlete" in result.keys():
-            athlete_name = result["Athlete"]
+        # Normalize event and get event info from taghash
+        event_name = next((k for k in taghash if k in event_tag), None)
+        if event_name:
+            event_order = taghash[event_name]["order"]
+            event_full_name = taghash[event_name]['name']
+        elif "m100h" in event_tag:
+            event_name = "m110h"
+            event_order = "asc"
+            event_full_name = taghash[event_name]['name']
         else:
-            athlete_name = team_name + " " + event_name + " relay team"
+            pp(result)
+            exit()
 
-        event_full_name = taghash[event_name]['name']
-
+        team_name = result.get("Team", "")
+        athlete_name = result.get("Athlete", f"{team_name} {event_name} relay team")
         team_conference = conference(team_name)
         team_name = team_conference["team"]
         conference_name = team_conference["conf"]
 
-        mark = result["Mark"]
-        if "Place" in result.keys():
-            place = result["Place"]
-        meet_name = result["meet_name"]
+        mark = result.get("Mark")
+        place = result.get("Place")
+        meet_name = result.get("meet_name")
 
-        #        pp(event_name)
-
-        conference_query = """INSERT OR IGNORE INTO Conferences (name) VALUES (?)"""
+        # Postgres: Use ON CONFLICT DO NOTHING for upserts
+        conference_query = """INSERT INTO Conferences (name) VALUES (%s) ON CONFLICT (name) DO NOTHING"""
         cursor.execute(conference_query, (conference_name,))
-        # Now the conference is in the DB
 
-        conference_id_query = "SELECT conference_id FROM Conferences WHERE name = ?"
+        conference_id_query = "SELECT conference_id FROM Conferences WHERE name = %s"
         cursor.execute(conference_id_query, (conference_name,))
-        conference_id = cursor.fetchone()[0]  # Get conference ID from query result
+        conference_id = cursor.fetchone()[0]
 
         team_query = (
-            """INSERT OR IGNORE INTO Teams (name, conference_id) VALUES (?, ?)"""
+            """INSERT INTO Teams (name, conference_id) VALUES (%s, %s) ON CONFLICT (name) DO NOTHING"""
         )
         cursor.execute(team_query, (team_name, conference_id))
-        # Now the team is in the DB
 
-        team_id_query = "SELECT team_id FROM Teams WHERE name = ?"
+        team_id_query = "SELECT team_id FROM Teams WHERE name = %s"
         cursor.execute(team_id_query, (team_name,))
-        team_id = cursor.fetchone()[0]  # Get team ID from query result
+        team_id = cursor.fetchone()[0]
 
-        athlete_query = """INSERT OR IGNORE INTO Athletes (name, team_id, conference_id) VALUES (?, ?, ?)"""
+        athlete_query = """INSERT INTO Athletes (name, team_id, conference_id) VALUES (%s, %s, %s) ON CONFLICT (name) DO NOTHING"""
         cursor.execute(athlete_query, (athlete_name, team_id, conference_id))
-        # Now the athlete is in the DB
 
         event_query = (
-            """INSERT OR IGNORE INTO Events (name, full_name, sort_order) VALUES (?, ?, ?)"""
+            """INSERT INTO Events (name, full_name, sort_order) VALUES (%s, %s, %s) ON CONFLICT (name) DO NOTHING"""
         )
         cursor.execute(event_query, (event_name, event_full_name, event_order))
-        # Now the event is in the DB
 
-        meet_query = """INSERT OR IGNORE INTO Meets (name, meet_date, location) VALUES (?, ?, ?)"""
+        meet_query = """INSERT INTO Meets (name, meet_date, location) VALUES (%s, %s, %s) ON CONFLICT (name) DO NOTHING"""
         cursor.execute(
             meet_query,
             (
                 meet_name,
                 datetime.datetime.strptime(result["meet_date"], "%Y-%m-%d").date(),
-                place,
+                result.get("venue", None),
             ),
         )
-        # Now the meet is in the DB
 
         # Insert data (assuming IDs for teams, conferences, and events already exist)
-        athlete_id_query = "SELECT athlete_id FROM Athletes WHERE name = ?"
+        athlete_id_query = "SELECT athlete_id FROM Athletes WHERE name = %s"
         cursor.execute(athlete_id_query, (athlete_name,))
-        athlete_id = cursor.fetchone()[0]  # Get athlete ID from query result
+        athlete_id = cursor.fetchone()[0]
 
-        event_id_query = "SELECT event_id FROM Events WHERE name = ?"
+        event_id_query = "SELECT event_id FROM Events WHERE name = %s"
         cursor.execute(event_id_query, (event_name,))
-        event_id = cursor.fetchone()[0]  # Get event ID from query result
+        event_id = cursor.fetchone()[0]
 
-        meet_id_query = "SELECT meet_id FROM Meets WHERE name = ?"
+        meet_id_query = "SELECT meet_id FROM Meets WHERE name = %s"
         cursor.execute(meet_id_query, (meet_name,))
-        meet_id = cursor.fetchone()[0]  # Get meet ID from query result
+        meet_id = cursor.fetchone()[0]
 
         insert_result = """INSERT INTO Results (athlete_id,
                                                 team_id, 
@@ -447,7 +428,8 @@ def insert_data(results, conn):
                                                 result_orig,
                                                 result_sort,
                                                 place)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT DO NOTHING"""
 
         if     mark.startswith('DISQ') \
             or mark.startswith('DQ') \

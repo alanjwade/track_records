@@ -29,13 +29,9 @@ def create_db(conn):
     cursor = conn.cursor()
     # Create tables (PostgreSQL syntax)
     cursor.execute(
-        """CREATE TABLE IF NOT EXISTS Athletes (
-                    athlete_id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE,
-                    team_id INTEGER,
-                    conference_id INTEGER,
-                    FOREIGN KEY (team_id) REFERENCES Teams(team_id),
-                    FOREIGN KEY (conference_id) REFERENCES Conferences(conference_id)
+        """CREATE TABLE IF NOT EXISTS Conferences (
+                    conference_id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE
                     );"""
     )
     cursor.execute(
@@ -47,9 +43,13 @@ def create_db(conn):
                     );"""
     )
     cursor.execute(
-        """CREATE TABLE IF NOT EXISTS Conferences (
-                    conference_id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE
+        """CREATE TABLE IF NOT EXISTS Athletes (
+                    athlete_id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    team_id INTEGER,
+                    conference_id INTEGER,
+                    FOREIGN KEY (team_id) REFERENCES Teams(team_id),
+                    FOREIGN KEY (conference_id) REFERENCES Conferences(conference_id)
                     );"""
     )
     cursor.execute(
@@ -81,7 +81,7 @@ def create_db(conn):
                     place INTEGER,
                     FOREIGN KEY (athlete_id) REFERENCES Athletes(athlete_id),
                     FOREIGN KEY (team_id) REFERENCES Teams(team_id),
-                    FOREIGN KEY (conference_id) REFERENCES Teams(conference_id),
+                    FOREIGN KEY (conference_id) REFERENCES Conferences(conference_id),
                     FOREIGN KEY (meet_id) REFERENCES Meets(meet_id),
                     FOREIGN KEY (event_id) REFERENCES Events(event_id)
                     );"""
